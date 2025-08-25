@@ -205,7 +205,7 @@ void __thiscall FUN_0085de70(int param_1_00,undefined4 param_1,undefined4 param_
 }
 ```
 
-So, what do we have here? This def looks like a thiscall, and beings a function that format file names in a loop, based on some counter.
+So, what do we have here? This def looks like a `thiscall`, and beings a function that format file names in a loop, based on some counter.
 
 Potentially `this` is an instance of Massive Ad Client or some other ads related structure, which should have an array of ads textures. Since this is clearly a backup handling for local placeholder textures, we can potentially override it and supply our own files into appropriate locations.
 
@@ -363,7 +363,7 @@ void __thiscall
 
 This is where more proficient RE people will tear me apart, saying that this means absolutely nothing, but it's a good start.
 
-### 2. Very similiar early code
+### 2. Very similar early code
 
 #### PC
 ```C++
@@ -391,11 +391,11 @@ This is where more proficient RE people will tear me apart, saying that this mea
 
 There we can see that second param coming into the function is being assigned to `this` offset. And such behavior is not a mere coincedence.
 
-`iVar4` being set in both in somewhat similiar fashion also looks suspicions.
+`iVar4` being set in both in somewhat similar fashion also looks suspicions.
 
 ### 3. Loop
 
-In both decompilation we can see that the main part of the function is a loop, which has a rather similiar initial variable assigment.
+In both decompilation we can see that the main part of the function is a loop, which has a rather similar initial variable assignment.
 
 #### PC
 ```C++
@@ -421,12 +421,12 @@ In both decompilation we can see that the main part of the function is a loop, w
     } while( true );
 ```
 
-Just to be clear, I'm not claiming that "since `iVar4` is present at both it's the same variable and so the code is the same". It's obviously a coincedence, that a 4th variable used inside the function is related to the loop in both decompilations. But sometimes we do get lucky, since source C++ code is the same, and it results in stuff like this. (Where those are the very same variable, but I know it while you don't, and here I'm providing my arguments for it.)
+Just to be clear, I'm not claiming that "since `iVar4` is present at both it's the same variable and so the code is the same". It's obviously a coincidence, that a 4th variable used inside the function is related to the loop in both decompilations. But sometimes we do get lucky, since source C++ code is the same, and it results in stuff like this. (Where those are the very same variable, but I know it while you don't, and here I'm providing my arguments for it.)
 
 
 ### 3. Various similiar checks
 
-When you cross-referencing the code, your best bet is checks. Setting up stack and function envocations could be drastically different, but those ifs are not only properly decompiled in 90% of the time, but in most cases are the same.
+When you cross-referencing the code, your best bet is checks. Setting up stack and function evocations could be drastically different, but those ifs are not only properly decompiled in 90% of the time, but in most cases are the same.
 #### PC
 ```C++
 if ((short)local_40 == -1) {
