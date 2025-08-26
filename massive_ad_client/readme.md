@@ -179,287 +179,7 @@ Now it's time to figure out the reply for this request.
 
 Just below `WriteLocateServiceRequest` I found `Parse@CRequestLocateService@MassiveAdClient3` and it's a rather long function.
 
-<details>
-  <summary>.Game::C_GameWorld::Update</summary>
-
-```C++
-void Parse@CRequestLocateService@MassiveAdClient3(int param_1)
-
-{
-  uint uVar1;
-  int iVar5;
-  char cVar10;
-  ulonglong uVar2;
-  byte bVar11;
-  ushort uVar8;
-  longlong lVar3;
-  void *pvVar6;
-  undefined4 *puVar7;
-  undefined2 uVar9;
-  undefined8 uVar4;
-  char local_a0;
-  
-  local_a0 = '\0';
-  *(undefined4 *)(param_1 + 0x20) = 0;
-  ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-            (5,*(undefined4 *)(param_1 + 0xc),0xffffffff8236ffbc);
-  iVar5 = ?ReadRemoveVerifyProtocolVersion@CRequestObject@MassiveAdClient3@@IAAHXZ(param_1);
-  if (iVar5 != 0) {
-    cVar10 = ?ReadU8@CRequestObject@MassiveAdClient3@@IAAEXZ(param_1);
-    ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-              (5,*(undefined4 *)(param_1 + 0xc),0xffffffff8236fa78,cVar10);
-    if (cVar10 == -0x36) {
-      uVar2 = ?ReadU32@CRequestObject@MassiveAdClient3@@IAAIXZ(param_1);
-      ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                (5,*(undefined4 *)(param_1 + 0xc),0xffffffff8236fa28,uVar2);
-      uVar1 = *(uint *)(param_1 + 0x20);
-      if ((uVar2 & 0xffffffff) != 0) {
-        do {
-          bVar11 = ?ReadU8@CRequestObject@MassiveAdClient3@@IAAEXZ(param_1);
-          if (bVar11 < 0x49) {
-            if (bVar11 == 0x48) {
-              lVar3 = ?ReadString@CRequestObject@MassiveAdClient3@@IAAPADXZ(param_1);
-              if (lVar3 == 0) {
-LAB_834b1bfc:
-                uVar4 = 0xffffffff8236fda8;
-                goto LAB_834b1c4c;
-              }
-              pvVar6 = ??2CMassiveBaseObject@MassiveAdClient3@@SAPAXI@Z(0x1c);
-              if (pvVar6 == (void *)0x0) {
-                iVar5 = 0;
-              }
-              else {
-                iVar5 = ??0CAddressIndexPair@MassiveAdClient3@@QAA@PADE@Z(pvVar6,lVar3,3);
-              }
-              if (iVar5 == 0) {
-                uVar4 = 0xffffffff8236fcf0;
-                goto LAB_834b1c4c;
-              }
-              pvVar6 = ??2CMassiveListNode@MassiveAdClient3@@SAPAXI@Z(0xc);
-              if (pvVar6 == (void *)0x0) {
-                uVar4 = 0;
-              }
-              else {
-                uVar4 = ??0CMassiveListNode@MassiveAdClient3@@QAA@PAX@Z(pvVar6,iVar5);
-              }
-              ?Append@CMassiveList@MassiveAdClient3@@QAAHPAVCMassiveListNode@2@@Z
-                        (param_1 + 0x50,uVar4);
-              uVar4 = 0xffffffff8236fe90;
-            }
-            else {
-              if (bVar11 == 0xd) {
-                bVar11 = ?ReadU8@CRequestObject@MassiveAdClient3@@IAAEXZ(param_1);
-                uVar4 = 0xffffffff8236ff20;
-                *(undefined4 *)(param_1 + 0x7c) = 1;
-                uVar8 = (ushort)bVar11;
-                *(byte *)(param_1 + 0x7a) = bVar11;
-                goto LAB_834b1b88;
-              }
-              if (bVar11 == 0x22) {
-                lVar3 = ?ReadString@CRequestObject@MassiveAdClient3@@IAAPADXZ(param_1);
-                if (lVar3 == 0) goto LAB_834b1bfc;
-                pvVar6 = ??2CMassiveBaseObject@MassiveAdClient3@@SAPAXI@Z(0x1c);
-                if (pvVar6 == (void *)0x0) {
-                  iVar5 = 0;
-                }
-                else {
-                  iVar5 = ??0CAddressIndexPair@MassiveAdClient3@@QAA@PADE@Z(pvVar6,lVar3,5);
-                }
-                if (iVar5 == 0) {
-                  uVar4 = 0xffffffff8236fd48;
-                  goto LAB_834b1c4c;
-                }
-                pvVar6 = ??2CMassiveListNode@MassiveAdClient3@@SAPAXI@Z(0xc);
-                if (pvVar6 == (void *)0x0) {
-                  uVar4 = 0;
-                }
-                else {
-                  uVar4 = ??0CMassiveListNode@MassiveAdClient3@@QAA@PAX@Z(pvVar6,iVar5);
-                }
-                ?Append@CMassiveList@MassiveAdClient3@@QAAHPAVCMassiveListNode@2@@Z
-                          (param_1 + 0x50,uVar4);
-                uVar4 = 0xffffffff8236fec0;
-              }
-              else {
-                if (bVar11 != 0x2d) {
-                  if (bVar11 != 0x3a) {
-                    if (bVar11 != 0x3b) goto LAB_834b19e0;
-                    uVar4 = ?ReadU64@CRequestObject@MassiveAdClient3@@IAA_KXZ(param_1);
-                    *(undefined8 *)(param_1 + 0x70) = uVar4;
-                    ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                              (5,*(undefined4 *)(param_1 + 0xc),0xffffffff8236fee0);
-                    local_a0 = local_a0 + '\x01';
-                    goto LAB_834b1b94;
-                  }
-                  uVar8 = ?ReadU16@CRequestObject@MassiveAdClient3@@IAAGXZ(param_1);
-                  *(ushort *)(param_1 + 0x78) = uVar8;
-                  uVar4 = 0xffffffff8236fef8;
-                  goto LAB_834b1b88;
-                }
-                lVar3 = ?ReadString@CRequestObject@MassiveAdClient3@@IAAPADXZ(param_1);
-                if (lVar3 == 0) {
-                  uVar4 = 0xffffffff8236fe48;
-                  goto LAB_834b1c4c;
-                }
-                pvVar6 = ??2CMassiveBaseObject@MassiveAdClient3@@SAPAXI@Z(0x1c);
-                if (pvVar6 == (void *)0x0) {
-                  iVar5 = 0;
-                }
-                else {
-                  iVar5 = ??0CAddressIndexPair@MassiveAdClient3@@QAA@PADE@Z(pvVar6,lVar3,4);
-                }
-                if (iVar5 == 0) {
-                  uVar4 = 0xffffffff8236fdf0;
-                  goto LAB_834b1c4c;
-                }
-                pvVar6 = ??2CMassiveListNode@MassiveAdClient3@@SAPAXI@Z(0xc);
-                if (pvVar6 == (void *)0x0) {
-                  uVar4 = 0;
-                }
-                else {
-                  uVar4 = ??0CMassiveListNode@MassiveAdClient3@@QAA@PAX@Z(pvVar6,iVar5);
-                }
-                ?Append@CMassiveList@MassiveAdClient3@@QAAHPAVCMassiveListNode@2@@Z
-                          (param_1 + 0x50,uVar4);
-                uVar4 = 0xffffffff8236fea8;
-              }
-            }
-            ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                      (5,*(undefined4 *)(param_1 + 0xc),uVar4,*(undefined4 *)(iVar5 + 0x18));
-            (*(code *)PTR_free_84494774)(lVar3);
-          }
-          else if (bVar11 == 0x49) {
-            puVar7 = (undefined4 *)??2CMassiveBaseObject@MassiveAdClient3@@SAPAXI@Z(0x18);
-            if (puVar7 == (undefined4 *)0x0) {
-              puVar7 = (undefined4 *)0x0;
-            }
-            else {
-              uVar9 = ?ReadU16@CRequestObject@MassiveAdClient3@@IAAGXZ(param_1);
-              ??0CMassiveBaseObject@MassiveAdClient3@@QAA@PAD@Z(puVar7,0xffffffff8236fb48);
-              *puVar7 = &PTR_??_GCPortIndexPair@MassiveAdClient3@@UAAPAXI@Z_8236fb44;
-              *(undefined2 *)((int)puVar7 + 0x16) = uVar9;
-              *(undefined *)(puVar7 + 5) = 3;
-            }
-            if (puVar7 == (undefined4 *)0x0) {
-              uVar4 = 0xffffffff8236fbf8;
-              goto LAB_834b1c4c;
-            }
-            pvVar6 = ??2CMassiveListNode@MassiveAdClient3@@SAPAXI@Z(0xc);
-            if (pvVar6 == (void *)0x0) {
-              uVar4 = 0;
-            }
-            else {
-              uVar4 = ??0CMassiveListNode@MassiveAdClient3@@QAA@PAX@Z(pvVar6,puVar7);
-            }
-            ?Append@CMassiveList@MassiveAdClient3@@QAAHPAVCMassiveListNode@2@@Z
-                      (param_1 + 0x60,uVar4);
-            uVar4 = 0xffffffff8236ff5c;
-LAB_834b1b84:
-            uVar8 = *(ushort *)((int)puVar7 + 0x16);
-LAB_834b1b88:
-            ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                      (5,*(undefined4 *)(param_1 + 0xc),uVar4,uVar8);
-          }
-          else {
-            if (bVar11 == 0x4a) {
-              puVar7 = (undefined4 *)??2CMassiveBaseObject@MassiveAdClient3@@SAPAXI@Z(0x18);
-              if (puVar7 == (undefined4 *)0x0) {
-                puVar7 = (undefined4 *)0x0;
-              }
-              else {
-                uVar9 = ?ReadU16@CRequestObject@MassiveAdClient3@@IAAGXZ(param_1);
-                ??0CMassiveBaseObject@MassiveAdClient3@@QAA@PAD@Z(puVar7,0xffffffff8236fb48);
-                *puVar7 = &PTR_??_GCPortIndexPair@MassiveAdClient3@@UAAPAXI@Z_8236fb44;
-                *(undefined2 *)((int)puVar7 + 0x16) = uVar9;
-                *(undefined *)(puVar7 + 5) = 4;
-              }
-              if (puVar7 != (undefined4 *)0x0) {
-                pvVar6 = ??2CMassiveListNode@MassiveAdClient3@@SAPAXI@Z(0xc);
-                if (pvVar6 == (void *)0x0) {
-                  uVar4 = 0;
-                }
-                else {
-                  uVar4 = ??0CMassiveListNode@MassiveAdClient3@@QAA@PAX@Z(pvVar6,puVar7);
-                }
-                ?Append@CMassiveList@MassiveAdClient3@@QAAHPAVCMassiveListNode@2@@Z
-                          (param_1 + 0x60,uVar4);
-                uVar4 = 0xffffffff8236ff78;
-                goto LAB_834b1b84;
-              }
-              uVar4 = 0xffffffff8236fc48;
-              goto LAB_834b1c4c;
-            }
-            if (bVar11 == 0x4b) {
-              puVar7 = (undefined4 *)??2CMassiveBaseObject@MassiveAdClient3@@SAPAXI@Z(0x18);
-              if (puVar7 == (undefined4 *)0x0) {
-                puVar7 = (undefined4 *)0x0;
-              }
-              else {
-                uVar9 = ?ReadU16@CRequestObject@MassiveAdClient3@@IAAGXZ(param_1);
-                ??0CMassiveBaseObject@MassiveAdClient3@@QAA@PAD@Z(puVar7,0xffffffff8236fb48);
-                *puVar7 = &PTR_??_GCPortIndexPair@MassiveAdClient3@@UAAPAXI@Z_8236fb44;
-                *(undefined2 *)((int)puVar7 + 0x16) = uVar9;
-                *(undefined *)(puVar7 + 5) = 5;
-              }
-              if (puVar7 != (undefined4 *)0x0) {
-                pvVar6 = ??2CMassiveListNode@MassiveAdClient3@@SAPAXI@Z(0xc);
-                if (pvVar6 == (void *)0x0) {
-                  uVar4 = 0;
-                }
-                else {
-                  uVar4 = ??0CMassiveListNode@MassiveAdClient3@@QAA@PAX@Z(pvVar6,puVar7);
-                }
-                ?Append@CMassiveList@MassiveAdClient3@@QAAHPAVCMassiveListNode@2@@Z
-                          (param_1 + 0x60,uVar4);
-                uVar4 = 0xffffffff8236ff98;
-                goto LAB_834b1b84;
-              }
-              uVar4 = 0xffffffff8236fc98;
-              goto LAB_834b1c4c;
-            }
-            if (bVar11 == 0x54) {
-              bVar11 = ?ReadU8@CRequestObject@MassiveAdClient3@@IAAEXZ(param_1);
-              uVar4 = 0xffffffff8236ff40;
-              *(undefined4 *)(param_1 + 0x84) = 1;
-              uVar8 = (ushort)bVar11;
-              *(byte *)(param_1 + 0x80) = bVar11;
-              goto LAB_834b1b88;
-            }
-LAB_834b19e0:
-            iVar5 = ?SkipField@CRequestObject@MassiveAdClient3@@IAAHE@Z(param_1);
-            if (iVar5 == 0) goto LAB_834b1c58;
-          }
-LAB_834b1b94:
-        } while (((ulonglong)*(uint *)(param_1 + 0x20) - (ulonglong)uVar1 & 0xffffffff) <
-                 (uVar2 & 0xffffffff));
-      }
-      if (local_a0 == '\x01') {
-        ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                  (5,*(undefined4 *)(param_1 + 0xc),0xffffffff8236f9e0);
-        ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                  (5,*(undefined4 *)(param_1 + 0xc),0xffffffff8236f9b8);
-        uVar4 = 1;
-        goto LAB_834b1c5c;
-      }
-      uVar4 = 0xffffffff8236f980;
-LAB_834b1c4c:
-      ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                (2,*(undefined4 *)(param_1 + 0xc),uVar4);
-    }
-    else {
-      ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
-                (2,*(undefined4 *)(param_1 + 0xc),0xffffffff8236fa3c,cVar10);
-    }
-  }
-LAB_834b1c58:
-  uVar4 = 0;
-LAB_834b1c5c:
-  __restgprlr(uVar4);
-  return;
-}
-```
-
-</details>
+% SCREENSHOT HERE %
 
 If we look though the function flow, it's rather simple.
 
@@ -700,9 +420,9 @@ Sadly, this didn't trigger the game to request more data, so, we're back to the 
 
 ## Debugging parser issues
 
-This one took a while to figure out, generally to my own stupidity.
+This one took a while to figure out, generally to my own stupidity. But it changed perception of the protocol for good, and will help tremendously moving forward.
 
-So! To leave the loop with a value of 1 we need to have a flag of `if_all_required_variables_were_parsed` of 1
+To leave the loop with a value of 1 we need to have a flag of `if_all_required_variables_were_parsed` of 1
 
 ```C++
     if (message_size <= (uint)(param_1->field32_0x20 - iVar1)) {
@@ -723,33 +443,59 @@ which is set here
           }
 ```
 
-So, we could trigger a "good ending" with only sending a packet consisting of field `0x3b` and U64 following it. Which again, didn't work. During that time I also fixed some bugs, like, lenght of strings is defgined as big endianess, not little.
+So, we could trigger a "good ending" with only sending a packet consisting of field `0x3b` and U64 following it. Which again, didn't work.
 
-```rust
-    pub fn add_string<E: Into<u8>>(&mut self, field: E, value: &str) {
-        let data = value.as_bytes();
-        self.buf.push(field.into());
-        self.buf
-            .write_u16::<BigEndian>(data.len() as u16)
-            .unwrap();
-        self.buf.extend_from_slice(data);
-    }
+So I decided to take a step back (instead of setting breakpoint at the location of `message_size` check and check the content of `param_1->field32_0x20` like I should have done first thing) and take a broader look at the data.
+
+### Going though what we have learned once more time just to be sure
+
+The starting message which I mapped as
+
+```
+03 - unknown
+c9000000 - task id (Locate service)
+19 - payload size
+3d00 - field id (SKU name)
+10 - string size
+6e66735f636172626f6e5f70635f6e61 - SKU name (nfs_carbon_pc_na)
+3e00 - field id (SKU version)
+03 - string size
+302e30 - SKU version (0.0)
 ```
 
-After speding a lot of time trying to figure out what field exactly is malformed I **finally** decided to actually check if we're hitting this line
+But if we ACTUALLY try to think a little bit more here about the payload as a whole we would notice some huge mistakes I made.
+
+1) Why task id is u32 and payload size is 1 byte? It makes more sense to have task id of 1 byte and payload size of u32.
+
+2) In the source code I provided the string is written as 
 
 ```C++
-    if (message_size <= (uint)(param_1->field32_0x20 - iVar1)) {
-      if (if_all_required_variables_were_parsed != '\x01') { //<< This one
-        return 0;
-      }
-      return 1;
-    }
+                    /* Writing SKU Name: %s */
+  ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+            (5,*(undefined4 *)(param_1 + 0xc),0xffffffff8236fbdc,param_2);
+  ?WriteU8@CRequestObject@MassiveAdClient3@@IAAXEH@Z(param_1,0x3e,0);
+  ?WriteString@CRequestObject@MassiveAdClient3@@IAAXPADH@Z(param_1,param_3,0);
 ```
 
-And I find out that I don't.
+No U16 for id, but inside `WriteString` there is a `WriteU16`. 
 
-That's when I decided to **actually** check the very simple check of `if (message_size <= (uint)(param_1->field32_0x20 - iVar1))` and to my suprise the data was written in big endiannes, instead of small endiannes I was sending.
+And that was the moment where I realized that me, being so used to little endianness on PC, got very, very wrong. Integers were written in big endianness all along!
+
+And if we look at the payload with our newly gained knowledge the **proper** format of the message is:
+
+```
+03 - protocol version
+c9 - task id (Locate service)
+00000019 - payload size
+3d - field id (SKU name)
+0010 - string size
+6e66735f636172626f6e5f70635f6e61 - SKU name (nfs_carbon_pc_na)
+3e - field id (SKU version)
+0003 - string size
+302e30 - SKU version (0.0)
+```
+
+And now that we know that, we can finally fix it.
 
 ```rust
     pub fn build_reply(self) -> Vec<u8> {
@@ -757,22 +503,41 @@ That's when I decided to **actually** check the very simple check of `if (messag
         let mut final_buf: Vec<u8> = Vec::new();
         final_buf.push(self.version.into());
         final_buf.push(self.task_id.into());
-        final_buf.write_u32::<LittleEndian>(self.buf.len() as u32);
+        final_buf.write_u32::<LittleEndian>(self.buf.len() as u32); //<< riiight here
         final_buf.extend_from_slice(&self.buf);
 
         final_buf
     }
 ```
 
-Well, 1 change of
+And by verifying that check I mentioned earlier 
+
+```C++
+if (message_size <= (uint)(param_1->field32_0x20 - iVar1))
+```
+
+I was able to confirm that data in memory was messed up, which failed the check, so we never hit the check for the flag. And just like that a small oversight at the very beginning lead me to 2 days of debugging of a *really* dumb issue.
+
+So a simple fix of 
 
 ```rust
 final_buf.write_u32::<BigEndian>(self.buf.len() as u32);
 ```
 
-And now comparasion works like it should and we exit with a result of 1. Well, that was dissapointingly dumb. Mainly in myself. But it seems like MassiveAdClient prefer big endiannes for numbers, so it should be easier from now on to deduct stuff.
+and
 
-And now we have a new request!
+```rust
+    pub fn add_string<E: Into<u8>>(&mut self, field: E, value: &str) {
+        let data = value.as_bytes();
+        self.buf.push(field.into());
+        self.buf
+            .write_u16::<BigEndian>(data.len() as u16) //<< Here
+            .unwrap();
+        self.buf.extend_from_slice(data);
+    }
+```
+
+finally made it all work as it should. And now we have a new request!
 
 ```
 [2025-08-25T04:37:29Z INFO  actix_web::middleware::logger] 127.0.0.1 "POST /adsrv/locateService HTTP/1.1" 200 56 "-" "Adclient Massive Inc./3.2.1.55" 0.000963
@@ -789,3 +554,371 @@ Oh. It's gonna take a while. But we do have symbols!
 
 ![alt text](img/open_session_symbols.png)
 
+As usual, using logging messages I reconstructed yet another enum of field ids:
+
+```rust
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum OpenSessionRequestMADFields {
+    //OpenSession
+    SKUName = 0x3d, //String
+    SKUVersion=0x3e, //String
+    SessionType=0x3c, //U8
+    ThirdPartyID=0x41, //String
+    ThirdPartyServiceName=0x42, //String
+    MultiplayerGUID=0x1c, //String
+    Token=0x44, //String
+    HashedHardwareID=0x1d, //String
+    AdClientVersion=0x16, //String
+}
+```
+
+And in return it expects:
+
+```rust
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum OpenSessionResponseMADFields {
+    //OpenSession
+    HMACSignature = 0x1e, //ByteArray
+    MassivePlayerID=0x2a, //U32
+    MassiveSessionID=0x2b, //U32
+    ZoneName=0x47, //String
+}
+```
+
+> HMACSignature
+
+Ah, so it's not gonna be easy.
+
+> `VerifyHMACSignature@CRequestObject@MassiveAdClient3`
+
+Yep.
+
+## HMAC and signatures
+
+We finally got a new fence to jump over - message signatures. Lucky for us, MassiveAdClient is using not something funny or home-made, but just SHA1 HMAC, at least judging by its name (but I have trust issues at this point):
+
+**Parse@CRequestOpenSession@MassiveAdClient3**
+```C++
+...
+      if (all_required_fields_are_present == '\x03') {
+        ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                  (5,uVar8,"Response contains all of the required fields.",uVar10,param_5,param_ 6,
+                   param_7,uVar12);
+        iVar6 = ?VerifyHMACSignature@CRequestObject@MassiveAdClient3@@IAAHXZ(param_1);
+        if (iVar6 != 0) {
+          ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                    (5,(char)*(undefined4 *)(param_1 + 0xc),"Response successfully read and parsed. "
+                     ,uVar10,param_5,param_6,param_7,uVar12);
+          return 1;
+        }
+      }
+      else {
+        ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                  (2,uVar8,"Response does not contain all of the required fields.",uVar10,param_ 5,
+                   param_6,param_7,uVar12);
+      }
+...
+```
+
+and inside of `VerifyHMACSignature` in Sk8te
+
+```C++
+bool ?VerifyHMACSignature@CRequestObject@MassiveAdClient3@@IAAHXZ(int param_1)
+
+{
+  size_t sVar2;
+  longlong lVar1;
+  int iVar3;
+  bool bVar4;
+  undefined uVar5;
+  undefined uVar6;
+  undefined in_r7;
+  undefined in_r8;
+  undefined in_r9;
+  undefined in_r10;
+  
+  sVar2 = strlen(&DAT_845e5370);
+  uVar6 = (undefined)sVar2;
+  lVar1 = ?CalculateSHA1HMac@@YAPBXPAEH0H@Z
+                    (*(undefined4 *)(param_1 + 0x1c),*(undefined4 *)(param_1 + 0x24),
+                     0xffffffff845e5370);
+  if (lVar1 == 0) {
+    ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+              (1,(char)*(undefined4 *)(param_1 + 0xc),
+               "Could not allocate space to calculate actual signature.",uVar6,in_r7,in_r8,in_r9 ,
+               in_r10);
+    bVar4 = false;
+  }
+  else {
+    iVar3 = memcmp(*(void **)(param_1 + 0x30),(void *)lVar1,0x14);
+    bVar4 = iVar3 == 0;
+    uVar5 = (undefined)*(undefined4 *)(param_1 + 0xc);
+    if (bVar4) {
+      ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                (5,uVar5,"Message passed signature verification",uVar6,in_r7,in_r8,in_r9,in_r10) ;
+    }
+    else {
+      ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                (2,uVar5,"Message failed signature verification",uVar6,in_r7,in_r8,in_r9,in_r10) ;
+    }
+    (*(code *)PTR_free_84494774)(lVar1);
+  }
+  return bVar4;
+}
+```
+
+After some cross-referencing with PC version I was finally able to track down `CalculateSHA1HMac` on PC:
+
+```C++
+void * __cdecl CalculateSHA1HMac(undefined *param_1,int param_2,undefined *param_3,size_t param_ 4)
+
+{
+  int iVar1;
+  void *_Dst;
+  byte local_108 [68];
+  byte local_c4 [68];
+  uint local_80 [26];
+  undefined local_18 [20];
+  
+  if (0x40 < (int)param_4) {
+    SHA1Reset(local_80);
+    SHA1Input(local_80,param_3,param_4);
+    SHA1Result(local_80,(int)local_18);
+    param_3 = local_18;
+    param_4 = 0x14;
+  }
+  memset(local_c4,0,0x41);
+  memset(local_108,0,0x41);
+  memcpy(local_c4,param_3,param_4);
+  memcpy(local_108,param_3,param_4);
+  iVar1 = 0;
+  do {
+    local_c4[iVar1] = local_c4[iVar1] ^ 0x36;
+    local_108[iVar1] = local_108[iVar1] ^ 0x5c;
+    iVar1 = iVar1 + 1;
+  } while (iVar1 < 0x40);
+  SHA1Reset(local_80);
+  SHA1Input(local_80,local_c4,0x40);
+  SHA1Input(local_80,param_1,param_2);
+  SHA1Result(local_80,(int)local_18);
+  SHA1Reset(local_80);
+  SHA1Input(local_80,local_108,0x40);
+  SHA1Input(local_80,local_18,0x14);
+  SHA1Result(local_80,(int)local_18);
+  _Dst = (void *)(*(code *)PTR_malloc_00a7b944)(0x14);
+  if (_Dst != (void *)0x0) {
+    memcpy(_Dst,local_18,0x14);
+  }
+  return _Dst;
+}
+```
+
+Which looks like...a default HMAC-SHA1 stuff? 
+
+SHA1 key hashing if key is too long
+```C++
+  if (0x40 < (int)param_4) {
+    SHA1Reset(local_80);
+    SHA1Input(local_80,param_3,param_4);
+    SHA1Result(local_80,(int)local_18);
+    param_3 = local_18;
+    param_4 = 0x14;
+  }
+```
+
+`ipad` and `opad` xoring
+
+  do {
+    local_c4[iVar1] = local_c4[iVar1] ^ 0x36;
+    local_108[iVar1] = local_108[iVar1] ^ 0x5c;
+    iVar1 = iVar1 + 1;
+  } while (iVar1 < 0x40);
+
+Then another SHA1 pass and we have out signature. This raises only 1 question - what is the key and the payload? Well, this is a simple question of 1 mock reply and 1 breakpoint.
+
+## OpenSession reply 
+
+We already know the fields:
+
+```rust
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum OpenSessionResponseMADFields {
+    //OpenSession
+    HMACSignature = 0x1e, //ByteArray
+    MassivePlayerID=0x2a, //U32
+    MassiveSessionID=0x2b, //U32
+    ZoneName=0x47, //String
+}
+```
+
+All except `HMACSignature` data format is know, so let's steal some more code. Lucky for me, it seems it's 1 to 1 to `String` format. Which is good news.
+
+```C++
+...
+    uVar1 = ReadU16@CRequestObject@MassiveAdClient3(param_1_00);
+    *param_3 = uVar1;
+    if (uVar1 == 0) {
+      *param_2 = (void *)0x0;
+    }
+    else {
+      uVar2 = CanRead@CRequestObject@MassiveAdClient3(param_1_00,(uint)uVar1);
+...
+```
+
+By constructing a very crude
+
+```rust
+
+#[post("/adsrv/openSession")]
+pub async fn open_session_v3(mut req: HttpRequest, mut body: web::Payload) -> impl Responder {
+    let hex_string = hex::encode(web::BytesMut::new());
+    info!("openSession payload: {hex_string}");
+
+    //We will ignore payload here
+
+    let mut reply = MADReply::new(
+        MadServerProtocolVersion::Version3,
+        MadReplyTaskId::OpenSession,
+    );
+
+    reply.add_bytes(OpenSessionResponseMADFields::HMACSignature, &vec![0; 24]);
+
+    reply.add_u32(OpenSessionResponseMADFields::MassivePlayerID, 1);
+
+    reply.add_u32(OpenSessionResponseMADFields::MassiveSessionID, 1);
+
+    reply.add_string(OpenSessionResponseMADFields::ZoneName, "lobby");
+
+    let bytes = reply.build_reply();
+
+    let hex_string = hex::encode(bytes.clone());
+    info!("reply payload: {hex_string}");
+
+    let mut reply = HttpResponse::Ok().body(bytes);
+
+    reply.head_mut().set_camel_case_headers(true);
+
+    reply
+}
+```
+
+I was able to hit `CalculateSHA1HMac` function in NFS: Carbon
+
+![alt text](img/sha1_step1.png)
+
+Good news: The data that gets hashes is "OpenSession request bytes payload". So this part is rather easy. And key is a string, not raw bytes. So we probably a dealing with some rather simplistic hash from something.
+
+Bad news: The key is not in the payload, which I suspected. And in the decompiler I can see it's location to be unpopulated:
+
+![alt text](img/sha1_key_unpopulated.png)
+
+More snooping, and we find what no Reverse Engineer wants to see.
+
+Something called `MassivePRNG`
+
+## MassivePRNG
+
+`PRGN` or `Pseudo RNG` or Pseudorandom are a pain to work with. Each developer go nuts at the sign of an opportunity to implement "ingenious" anti-tampering feature, and this case is not an exception.
+
+Some cross-reference later and we have a complete function
+
+```C++
+void __cdecl MassivePRNG(char *param_1)
+
+{
+  int iVar1;
+  uint uVar2;
+  uint uVar3;
+  uint uVar4;
+  uint uVar5;
+  longlong lVar6;
+  char *pcVar7;
+  size_t sVar8;
+  undefined local_128 [128];
+  char local_a8 [128];
+  char local_28 [36];
+  
+  pcVar7 = local_a8;
+  sVar8 = 0x80;
+  iVar1 = Instance@CMassiveClientCore@MassiveAdClient3();
+  lVar6 = GetTime@CMassiveClientCore@MassiveAdClient3(iVar1);
+  Instance@CMassiveSystem@MassiveAdClient3();
+  GetServerTimeFormatted((uint)lVar6,(uint)((ulonglong)lVar6 >> 0x20),pcVar7,sVar8);
+  sVar8 = strlen(local_a8);
+  memcpy(local_128,local_a8,sVar8);
+  sVar8 = strlen(local_a8);
+  init_by_array((int)local_128,(int)sVar8 / 4);
+  uVar2 = genrand_int32();
+  uVar3 = genrand_int32();
+  uVar4 = genrand_int32();
+  uVar5 = genrand_int32();
+  _snprintf(local_28,0x21,s_%x%x%x%x_009fec18,uVar2,uVar3,uVar4,uVar5);
+  strncpy(param_1,local_28,0x21);
+  return;
+}
+```
+
+`GetServerTimeFormatted` is also required to better undestand the flow, so, here
+
+```C++
+void GetServerTimeFormatted(uint timestamp,uint seconds,char *return_buffer,size_t param_4)
+
+{
+  tm *ptVar1;
+  undefined4 extraout_ECX;
+  undefined8 uVar2;
+  char local_44 [32];
+  char local_24 [32];
+  
+  uVar2 = __aulldvrm(timestamp,seconds,1000,0);
+  seconds = (uint)uVar2;
+  ptVar1 = localtime((time_t *)&seconds);
+  if (ptVar1 == (tm *)0x0) {
+    _snprintf(return_buffer,param_4,s_Time_Unavailable_009fe538);
+  }
+  else {
+    _snprintf(local_44,0x20,s_%d-%.2d-%.2d_009fe560,ptVar1->tm_year + 0x76c,ptVar1->tm_mon + 1,
+              ptVar1->tm_mday);
+    _snprintf(local_24,0x20,s_%.2d:%.2d:%.2d,%.3d_009fe54c,ptVar1->tm_hour,ptVar1->tm_min,
+              ptVar1->tm_sec,extraout_ECX);
+    _snprintf(return_buffer,param_4,&DAT_009c5fc8,local_44,local_24);
+  }
+  return;
+}
+```
+This math jumpscare here 
+
+```c++
+  uVar2 = __aulldvrm(timestamp,seconds,1000,0);
+```
+
+confused me at first, but turns out it's a simple `%` math operation, as confirmed by Xbox 360 decompilation:
+
+```C++
+int GetServerTimeFormatted(undefined8 param_1,ulonglong param_2,char *param_3,size_t param_4)
+
+{
+  uint *puVar1;
+  int iVar2;
+  ulonglong local_80 [2];
+  char acStack_70 [32];
+  char acStack_50 [80];
+  
+  local_80[0] = param_2 / 1000;
+  puVar1 = (uint *)_localtime64(local_80);
+  if (puVar1 == (uint *)0x0) {
+    iVar2 = _snprintf(param_3,param_4,"Time Unavailable");
+  }
+  else {
+    _snprintf(acStack_50,0x20,"%d-%.2d-%.2d ",(ulonglong)puVar1[5] + 0x76c,(ulonglong)puVar1[4] + 1,
+              (ulonglong)puVar1[3]);
+    _snprintf(acStack_70,0x20,"%.2d:%.2d:%.2d,%.3d",(ulonglong)puVar1[2],(ulonglong)puVar1[1],
+              (ulonglong)*puVar1,param_2 % 1000);
+    iVar2 = _snprintf(param_3,param_4,"%s%s",acStack_50,acStack_70);
+  }
+  return iVar2;
+}
+```
