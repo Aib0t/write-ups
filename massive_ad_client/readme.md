@@ -922,3 +922,158 @@ int GetServerTimeFormatted(undefined8 param_1,ulonglong param_2,char *param_3,si
   return iVar2;
 }
 ```
+
+After a lot of debugging, googling function names and random variables I was able to narrow down the whole flow:
+
+- get timestamp in milliseconds from `locateService` response
+- add a number of full seconds that had passed since known timestamp (in NFS: Carbon case for `openSession` it's zero)
+- format the timestamp into `2025-01-01 00:00:00,000`
+- initialize a `Mersenne Twister PRNG` with 5 u32 from `2025-01-01 00:00:00,000` as byte array (`init_by_array`)
+- generate 4 u32 to get the key
+
+Which is fine, give or take. At this moment in time I still have concern regarding `GetTickCount` in the function responsible for the current time, since debuggers could mess this up.
+
+But! It seems like it's only used in `WriteOpenSessionRequest` and `Parse@OpenSessionRequest` which means other messages don't perfrom any signatures checks, and we don't have to worry about it. Hopefully.
+
+So to save us some time I'll just hardcode the value to `1735689600000` which is January 1, 2025 12:00:00 AM. 
+
+### Note for the future.
+
+After some test runs I find out that the string, from which key is generated is adding your local timezone for into parsed time string:
+
+`1735689600000` transforms into `2025-01-01 03:00:00,000` at client side.
+
+This is pose an issue, since client timezone info (at least to my current understandment) is not being send towards the server, and was deducted by the server based on geo ip data. Since 2000s internet transformed sagnificantly and geo ip is not a valid source of info for such calculations. This breaks HMAC signature verification, since server and client can't generate the same key anymore, and breaks the flow entirely.
+
+Lucky for us we can patch it eventually with dll injections, but for now I'll just utilize hardcoded value.
+
+Anyway, onwards, to the next call!
+
+## Back to HMAC
+
+Now we have the key and the payload to generate hmac-sha1 signature.
+
+Finding a rust library, capable of doing this prng properly took a while, but the whole code is rather simple 
+
+```rust
+let time = "2025-01-01 03:00:00,000";
+    let mut array = bytes_to_vec_u32(time.as_bytes());
+    let (left, _) = array.split_at_mut(5);
+
+    let mut mt = MT19937::new_with_slice_seed(left);
+
+    let a = mt19937::MT19937::next_u32(&mut mt);
+    let b = mt19937::MT19937::next_u32(&mut mt);
+    let c = mt19937::MT19937::next_u32(&mut mt);
+    let d = mt19937::MT19937::next_u32(&mut mt);
+
+    let token = format!("{:08x}{:08x}{:08x}{:08x}", a, b, c, d);
+```
+
+
+Now we just need to set a hmac-sha1 combo and we're golden!
+
+## 8 hours later
+Update: we're not golden.
+
+As it usually goes, the simplest things turns out the most troublesome. At first, I assumed that signature for a reply is a body of an incoming message, because `CalculateSHA1HMac` was triggered with it as a payload and in `WriteOpenSessionRequest` function there is no mentions of signatures. And since I can check the output of MassiveAdClient HMAC-SHA1 function I can verify if my output is okay or not.
+
+But time and time again I failed to generate the same signature as the one game was generating and at this point you big to loot at each idividual byte and trace all the buffers.
+
+So my breakpoint is set at `CalculateSHA1HMac` and it triggers with `OpenSession` payload.
+
+![alt text](img/open_session_payload.png)
+
+I try to generate an answer to it, push "Run" in x32dbg and... `CalculateSHA1HMac` gets hit again!
+
+But now with my reply payload:
+
+![alt text](img/open_session_reply_payload.png)
+
+What is going on here?
+
+Well turns out game append timestamp and signature to messages after generating the main request payload.
+
+![alt text](img/timestamp_and_sign.png)
+
+And this is up to server to parse and verify it. Which I didn't. And the message signature is based on the message payload with 
+
+**MESSAGE BODY WITHOUT PROTOCOL VERSION BYTE AND WITH SIGNATURE FIELD BYTE (`0x1e`) AT THE END INCLUDED**
+
+*sigh* okay, okay. Those thing happen, you need to be prepared. You would think that after fixing that and adding to my reply builder function the required code with hmac-sha1 of outgoing packet it will finally be working.
+
+And you would be wrong!
+
+For one reason or another HMAC-SHA1 in MassiveAdClient is not compatible with real world implementations and instead is using what looks like a one according to documentations, but all rust and python libs are failing to produce the same result as it.
+
+So I gave up and cheated, by asking ChatGPT to rewrite the source code from the decompiler. Which FINALLY worked.
+
+the final code for the reply with signature looks like:
+
+```rust
+    pub fn build_reply_with_signature(self) -> Vec<u8> {
+
+        let mut pre_final_buf: Vec<u8> = Vec::new();
+
+        pre_final_buf.push(self.task_id.into());
+        pre_final_buf.write_u32::<BigEndian>(self.buf.len() as u32 + 23); 
+        pre_final_buf.extend_from_slice(&self.buf);
+
+        let time = "2025-01-01 03:00:00,000";
+        let mut array = bytes_to_vec_u32(time.as_bytes());
+        let (left, _) = array.split_at_mut(5);
+    
+        let mut mt = MT19937::new_with_slice_seed(left);
+    
+        let a = mt19937::MT19937::next_u32(&mut mt);
+        let b = mt19937::MT19937::next_u32(&mut mt);
+        let c = mt19937::MT19937::next_u32(&mut mt);
+        let d = mt19937::MT19937::next_u32(&mut mt);
+    
+        let token = format!("{:08x}{:08x}{:08x}{:08x}", a, b, c, d); 
+        println!("token = {}", token);
+        
+        let mut mac = Hmac::<Sha1>::new_from_slice(token.as_bytes()).unwrap();
+
+        let mut temp = pre_final_buf.clone();
+        temp.push(0x1e);
+  
+        let digest = calculate_sha1_hmac_exact(token.as_bytes(), &temp);
+        info!("digest: {}", hex::encode(&digest));
+
+        let mut final_buf: Vec<u8> = Vec::new();
+        final_buf.push(self.version.into());
+        final_buf.extend_from_slice(&pre_final_buf);
+        final_buf.push(OpenSessionResponseMADFields::HMACSignature as u8);
+        final_buf.write_u16::<BigEndian>(digest.len() as u16).unwrap();
+        final_buf.extend_from_slice(&digest);
+
+        final_buf
+    }
+```
+And finally, after all of those struggles and shamefull ChatGPT request I was getting
+
+```
+[2025-08-27T05:33:22Z INFO  actix_web::middleware::logger] 127.0.0.1 "POST /adsrv/openSession HTTP/1.1" 200 39 "-" "Adclient Massive Inc./3.2.1.55" 0.001453
+[2025-08-27T05:34:32Z INFO  actix_web::middleware::logger] 127.0.0.1 "POST /adsrv/enterZone HTTP/1.1" 404 0 "-" "Adclient Massive Inc./3.2.1.55" 0.000088
+```
+
+Time to supply textures.
+
+## EnterZone
+
+`03cd00000033470006746e2e332e312a000000012b000000013b000001941f2a89e61e00146ea45f3718b214bb80c6233886d8db549dbb6459`
+
+And if we break it down:
+
+```
+03 - protocol
+cd - call
+00000033 - size
+47 0006 746e2e332e31 - zone name 'tn.3.1'
+2a 00000001 -user id
+2b 00000001 - session id
+3b 000001941f2a89e6 - timestamp from the client
+1e 0014 6ea45f3718b214bb80c6233886d8db549dbb6459 - Hmac signature
+```
+
