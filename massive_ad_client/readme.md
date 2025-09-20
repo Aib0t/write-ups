@@ -1076,4 +1076,124 @@ cd - call
 3b 000001941f2a89e6 - timestamp from the client
 1e 0014 6ea45f3718b214bb80c6233886d8db549dbb6459 - Hmac signature
 ```
+And by analyzing the decompiled code we finally got to the part where game expects assets. But there are some caveats, but let's go step by step.
 
+```C++
+  cVar12 = '\0';
+  *(undefined4 *)(param_1 + 0x20) = 0;
+  ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+            (5,(char)*(undefined4 *)(param_1 + 0xc),"Reading Response...",param_4,param_5,param_6 ,
+             param_7,param_8);
+  iVar5 = ?ReadRemoveVerifyProtocolVersion@CRequestObject@MassiveAdClient3@@IAAHXZ(param_1);
+  if (iVar5 != 0) {
+    cVar7 = ?ReadU8@CRequestObject@MassiveAdClient3@@IAAEXZ(param_1);
+    uVar10 = 0;
+    ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+              (5,(char)*(undefined4 *)(param_1 + 0xc),"Block ID: %d",cVar7,param_5,param_6,param_ 7,0
+              );
+    if (cVar7 == -0x32) {
+      uVar2 = ?ReadU32@CRequestObject@MassiveAdClient3@@IAAIXZ(param_1);
+      uVar4 = uVar2;
+      ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                (5,(char)*(undefined4 *)(param_1 + 0xc),"Block Length: %d",(char)uVar2,param_5,
+                 param_6,param_7,(char)uVar10);
+      uVar9 = (undefined)uVar4;
+      uVar1 = *(uint *)(param_1 + 0x20);
+      uVar14 = 0;
+      uVar13 = 0;
+      if ((uVar2 & 0xffffffff) != 0) {
+        do {
+          cVar7 = ?ReadU8@CRequestObject@MassiveAdClient3@@IAAEXZ(param_1);
+          if (cVar7 == '\x1e') {
+            ?ReadRemoveSignature@CRequestObject@MassiveAdClient3@@IAAXXZ(param_1);
+            ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                      (5,(char)*(undefined4 *)(param_1 + 0xc),"Reading HMAC Signature:",(char)uVa r4,
+                       param_5,param_6,param_7,(char)uVar10);
+            ?DumpByteArray@CRequestObject@MassiveAdClient3@@QAAXPACG@Z
+                      (param_1,*(undefined4 *)(param_1 + 0x30),0x14);
+            uVar2 = uVar2 - 0x16;
+LAB_834b721c:
+            cVar12 = cVar12 + '\x01';
+          }
+          ...
+```
+
+We can see the familiar checks for block id, block lenght and signature checks, which we have already implemented in previous steps. But after it an issue arise in form of 
+
+```C++
+...
+            if (cVar7 == '%') {
+              uVar4 = ?ReadU16@CRequestObject@MassiveAdClient3@@IAAGXZ();
+              pcVar8 = "IE Count: %d";
+              *(short *)(param_1 + 0x60) = (short)uVar4;
+LAB_834b71cc:
+              uVar4 = uVar4 & 0xffff;
+              ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+                        (5,(char)*(undefined4 *)(param_1 + 0xc),pcVar8,(char)uVar4,param_5,param_6 ,
+                         param_7,(char)uVar10);
+              goto LAB_834b721c;
+            }
+            if (cVar7 == 'U') {
+              uVar4 = ?ReadU16@CRequestObject@MassiveAdClient3@@IAAGXZ();
+              *(short *)(param_1 + 0x88) = (short)uVar4;
+              pcVar8 = "Order Count: %d";
+              goto LAB_834b71cc;
+            }
+            if (cVar7 == -0x23) {
+              iVar5 = ?ReadIEBlock@CRequestEnterZone@MassiveAdClient3@@AAAPAVCMassiveAdObject@2@XZ ()
+...
+```
+
+What is `IE` ? Well, if we check `ReadIEBlock` we will learn that
+
+```C++
+  ?Log@CLog@MassiveAdClient3@@SAXW4__MASSIVE_ENUM_LOG_LEVEL@2@PAD1ZZ
+            (5,(char)*(undefined4 *)(param_1 + 0xc),"Reading Inventory Element Block...",param_4,
+             (char)param_5,(char)param_6,(char)param_7,(char)param_8);
+```
+
+It wasn't very clear to me, what `Inventory Element` is, but a quick google let us know that it stands for `Ad inventory refers to the available ad space on digital platforms like websites, apps, and videos that publishers sell to advertisers to display their advertisements. `. So it seems like we need to let the game know which Inventory Elements exists on the Zone, and this pose a very, very sagnificat challenge for RE. I honestly expected that game would let the backend know about places and sizes of files it wants. But it seems like backend should be already have this data. And I have no idea how to extract this data from NFS: Carbon, let alone any game. Let's put it aside for now and check the rest, because it's more interesting.
+
+Below the `ReadIEBlock` we can see `ReadOrderBlock`
+
+```C++
+            else if (cVar7 == -0x1d) {
+              iVar5 = ?ReadOrderBlock@CRequestEnterZone@MassiveAdClient3@@AAAPAVCMassiveOrder@2@XZ ()
+              ;
+```
+
+And inside it we finally get to the juicy part
+
+```C++
+        uVar18 = ?ReadU16@CRequestObject@MassiveAdClient3@@IAAGXZ(param_1);
+        pcVar10 = "Asset Count: %d";
+        uVar4 = uVar18 & 0xffff;
+```
+
+And if we follow into `ReadAssetBlock`
+
+```C++
+        if (cVar8 == -0x22) {
+          iVar5 = ?ReadAssetBlock@CRequestEnterZone@MassiveAdClient3@@AAAPAVCMassiveAsset@2@XZ() ;
+```
+
+And inside it
+
+```C++
+      case 9:
+        uVar3 = ?ReadU32@CRequestObject@MassiveAdClient3@@IAAIXZ(param_1);
+        local_c4 = (undefined4)uVar3;
+        pcVar10 = "Asset Type: %d";
+        break;
+      case 10:
+        uVar3 = ?ReadString@CRequestObject@MassiveAdClient3@@IAAPADXZ(param_1);
+        uVar18 = uVar3;
+        pcVar10 = "Asset URL: %s";
+        break;
+```
+
+We finally get to the fun part!
+
+And so to sum up all the findings, the `EnterZone` request contain `IE` block and `Order` block, and `Order` block contain `Asset` block which are actual assets, well, urls to assets. I omended some less interesting parts of the `Order` block, but we will get to them, don't you worry.
+
+And now we have a problem in form of unknown `IE` block flow and how are we suppose to get all the placements on the level. But one problem at a time, let's get back to writing the code.
