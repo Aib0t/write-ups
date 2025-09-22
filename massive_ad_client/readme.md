@@ -1,12 +1,22 @@
 # Massive Ad Client [DRAFT]
 
 23/08/25 - very early version
-
+17/09/25 - half done client research, history
 ---
 
 ## INTRO
 
+Back in a day, when internet was still young a lot of very serious people in suits were trying their best to apply real-world business practice of old to the new field of the internet. One of such thing was ads. While ads in web and mobile ads are now a staple of the web as a whole, ads in videogames in form of in-game objects are rather uncommon. The most recent example I can recal myself is ads in Battlefield 2042, but that's it.
+
+But in 2000s there were a lot of attempts to capture the market and create another flow of the revenue for developers and publishers. There were many, but Massive Incorporated was probably the most notable one, present in AAA titles of that era.
+
+And so me, being a researcher of silly network things in videogames, couldn't pass the opportunity to take a look into it.
+
 ## HISTORY
+
+Massive Incorporated was created in 2002 as a `advertising company that provided software and services to dynamically host advertisements within video games`. It's rather hard to track down the very first title, but according to [this](https://web.archive.org/web/20220817143603/https://www.gamesindustry.biz/massive-incorporated-unleashes-next-gen-version-of-its-in-game-advertising-technology) article at the end of 2005 they were already on version 3 and boasting about "over 100 titles"
+
+There also a portfolio from an ex worker, who was kind enough to include a lot of games with it https://madestream.com/portfolio_v3/project.php?pid=309&name=Massive+Incorporated+Game+Ads . Thanks, David Or!
 
 ## Known Versions
 
@@ -1196,4 +1206,4 @@ We finally get to the fun part!
 
 And so to sum up all the findings, the `EnterZone` request contain `IE` block and `Order` block, and `Order` block contain `Asset` block which are actual assets, well, urls to assets. I omended some less interesting parts of the `Order` block, but we will get to them, don't you worry.
 
-And now we have a problem in form of unknown `IE` block flow and how are we suppose to get all the placements on the level. But one problem at a time, let's get back to writing the code.
+And now we have a problem in form of unknown `IE` block flow and how are we suppose to get all the placements on the level. But one problem at a time, let's get back to writing the code.And that's were things gets complicated. Game expects 2 arrays in return: campaigns and slots.
