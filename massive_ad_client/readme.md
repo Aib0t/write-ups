@@ -1206,4 +1206,211 @@ We finally get to the fun part!
 
 And so to sum up all the findings, the `EnterZone` request contain `IE` block and `Order` block, and `Order` block contain `Asset` block which are actual assets, well, urls to assets. I omended some less interesting parts of the `Order` block, but we will get to them, don't you worry.
 
-And now we have a problem in form of unknown `IE` block flow and how are we suppose to get all the placements on the level. But one problem at a time, let's get back to writing the code.And that's were things gets complicated. Game expects 2 arrays in return: campaigns and slots.
+And now we have a problem in form of unknown `IE` block flow and how are we suppose to get all the placements on the level. But one problem at a time, let's get back to writing the code.
+
+# EnterZone implementation
+
+By doing the familiar dance I mapped all the values into rust:
+
+```rust
+
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ZoneEnterResponseMADFields {
+    IECount = 0x25,    //U16
+    OrderCount = 0x55, //U16
+    IEBlock = 0xDD,
+    OrderBlock = 0xE3,
+}
+
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ZoneEnterIDResponseMADFields {
+    //Inventory Element
+    IEAssetArray = 0x24,           // U32 array
+    IEAngleThreshold = 0x08,       // Float
+    IEDistanceThreshold = 0x09,    // Float
+    IESizeThreshold = 0x0a,        // U16
+    IEMediaType = 0x0b,            // U32
+    IEAdjustment = 0x23,           // Float
+    IEId = 0x26,                   // U32
+    IEName = 0x27,                 // String
+    IERotationType = 0x28,         // U16
+    IEPrimaryMatchListSize = 0x2e, // U8
+}
+
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ZoneEnterOrderBlockResponseMADFields {
+    OrderAssetCount = 0x01,   //U16
+    OrderFrequencyCap = 0x03, //U32
+    OrderId = 0x13,           //U32
+    OrderAssetBlock = 0xDE,
+}
+
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ZoneEnterAssetBlockResponseMADFields {
+    //Skate 2 decompilation shows switch((FieldId & 0xff) - 2) instead of common if block, so those could be wrong
+    AssetExpiration = 0x00,       //U64, timestamp
+    AssetHash = 0x02,             //Byte Array
+    AssetId = 0x03,               //U32
+    AssetRotationDuration = 0x04, //U32
+    AssetSize = 0x05,             //U32
+    AssetAngleTreshold = 0x06,    //f32
+    AssetDistanceTreshold = 0x07, //f32
+    AssetSizeTreshold = 0x08,     //u16
+    AssetType = 0x09,             //u32
+    AssetUrl = 0x0A,              //String
+    AssetCrexId = 0x13,           //U32
+}
+```
+While it's satisfactory to look at the properly formatted data, a lot of here is unknown. What are angle, distance and size tresholds? What is `Crex Id` ? Are inventory items retrivable from the game? Do we need to know their in-game names?
+
+Truth to be told, I took a month long break after I hit `EnterZone` function and saw all of the params. And usually when I hit a wall like this, I like to get back to getting samples, look out for clues and just googling for anything related.
+
+And suprisingly for me I found this extrimely patriotic post from a proud American.
+
+![alt text](img/very_patriotic_post.png)
+
+Content aside, that part
+
+> These guys did a little investigating, and can explain a lot better than I cann, exactly what it does: http://nationalcheeseemporium.org/
+
+is eyebrow-rising.
+
+What are the chances that on a website http://nationalcheeseemporium.org/ somebody posted a very detailed research of Massive Ad Client back in 2006?
+
+Like, **really?**
+
+Turns out, it's one of those "10th page of Google" wonders you find once in a lifetime. And lucky for us it's avaliable though webarchive.
+
+http://web.archive.org/web/20050901032347/http://nationalcheeseemporium.org/#expand
+
+And it's a motherload of data!
+
+```xml
+...
+ <enterZoneResponse sig="4e94632c2cca5333434670c7fd4400d4">
+ <mediaList>
+  <media>
+   <id>4089</id>
+   <name>Coke_c_128x256.dds</name>
+   <mimeType>image/dxt3</mimeType>
+   <size>43856</size>
+   <md5sum>344d99d07bda2ceecf79720d59d58ae9</md5sum>
+   <urlpath>/187/1631/Coke_c_128x256.dds</urlpath>
+   <crex>
+    <id>1631</id>
+    <minSize>100</minSize>
+    <minDuration>5000</minDuration>
+    <minAngle>50</minAngle>
+   </crex>
+  </media>
+  <media>
+   <id>4327</id>
+   <name>SWAT_GameFly_256x128.dds</name>
+   <mimeType>image/dxt3</mimeType>
+   <size>43856</size>
+   <md5sum>5bf9e25025e46a5d78b08f0b9d3c0dd7</md5sum>
+   <urlpath>/190/1686/SWAT_GameFly_256x128.dds</urlpath>
+   <crex>
+    <id>1686</id>
+    <minSize>100</minSize>
+    <minDuration>5000</minDuration>
+    <minAngle>50</minAngle>
+   </crex>
+  </media>
+  ...
+```
+
+Aside from the fact, that it's a Massive Ad Client v1, the structures are very close to what we have in v3. And now we know how a reply for assets should looks like.
+
+```xml
+ <mediaTarget>
+   <id>803</id>
+   <name>poster18</name>
+  </mediaTarget>
+  <mediaTarget>
+   <id>783</id>
+   <name>cereal1</name>
+  </mediaTarget>
+   <mediaTarget>
+    <id>808</id>
+    <name>sodasign3</name>
+  </mediaTarget>
+  <mediaTarget>
+   <id>788</id>
+   <name>poster3</name>
+   <mediaRef id="4323"/>
+  </mediaTarget>
+  <mediaTarget>
+   <id>796</id>
+   <name>poster11</name>
+  </mediaTarget>
+  <mediaTarget>
+   <id>786</id>
+   <name>poster1</name>
+   <mediaRef id="4300"/>
+  </mediaTarget>
+```
+
+My worst fears were confirmed, backend is supplying client with ids and names of ads placements in a zone. But at the very least we now have some sort of a reference.
+
+```xml
+ <mediaZones>
+  <mediaZone>
+   <id>70</id>
+   <name>SP-ConvenienceStore</name>
+   <mediaTargetRef id="800"/>
+   <mediaTargetRef id="794"/>
+   <mediaTargetRef id="793"/>
+   <mediaTargetRef id="799"/>
+   <mediaTargetRef id="791"/>
+   <mediaTargetRef id="804"/>
+   <mediaTargetRef id="803"/>
+```
+and this seems to be just a zone data, which we don't have in v3. Oh well.
+
+But we also get a glimpce into next request - `/impsrv/impressionUpdate`
+
+```xml
+ <impressionRecords>
+  <impressionRecord type="view">
+   <timestamp>1120347977797</timestamp>
+   <crexId>1685</crexId>
+   <inventoryID>800</inventoryID>
+   <duration>1060</duration>
+   <avgSize>88</avgSize>
+   <avgAngle>0.963</avgAngle>
+  </impressionRecord>
+  <impressionRecord type="impression">
+   <timestamp>1120347980104</timestamp>
+   <crexId>1685</crexId>
+   <inventoryID>800</inventoryID>
+   <duration>792</duration>
+   <avgSize>117</avgSize>
+   <avgAngle>0.905</avgAngle>
+  </impressionRecord>
+```
+
+And now `Angle` and `Size` tresholds makes a little more sense. Those are params for minimal texture size/angle on the screen to be displayed. 
+
+While original authors state that 
+
+> The most shocking part was next. The client contacted madserver to tell the advertisers how long the gamer spent with each advert in their view. This is mapped to the gamer id, so they know which player in the game saw the advert, and when, for how long, and from how far away (by virtue of the size attribute). Even the average viewing angle is passed back. 
+
+this is "shocking", this data makes a lot of sense for "billing" part of the business, to actually bill the advertisers based on impression of their ads. While somewhat intrusive, thise is mild, compared to algorithms of current day and age. Just like the original authors said:
+
+> If this stuff is just first generation, then who knows how invasive and/or detailed this technology could become.
+
+Ironic, isn't it?
+
+Anyway, now we know for sure, that we need some way to extract data from ads placements on the level for each title by hand. And a little bit more fluet with all the values present in `EnterZone` reply.
+
+Time to dig deeper into games.
+
+# Getting placements data
+
+
+
