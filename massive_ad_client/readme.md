@@ -1412,5 +1412,71 @@ Time to dig deeper into games.
 
 # Getting placements data
 
+My attempts with NFS: Carbon and publicly avaliable tools lead to almost nowhere.
 
+![alt text](img/ads_nfs_carbon.png)
+
+There are several files with `ADS_` prefix, but it's not very clear, if those are used as names, or there is some other translation layer. So I decided to switch my test subject to a more approachable `Rainbow Six: Vegas`.
+
+Thanks to `UPK Explorer` and their attempt to support all known to humankind Unreal games, it's possible to browse Vegas 1 data structs. And in map files (and `MassiveConfig` struct) I was able to find all the ads names, which I suspect are correct. Vegas 1 is also a fine test subject, due to me being a bit familiar with Unreal Engine 3 approaches to structs and data.
+
+![alt text](img/vegas_ads.png)
+
+And if we export all of them we get a nice list of:
+
+```
+MP_Casino01_Ad02b_CorrA
+MP_Ad04
+MP_MASSIVE_RackFiles03c
+MP_MASSIVE_RackFiles03b
+MP_MASSIVE_RackFiles03a
+MP_Ad02c
+MP_Casino01_Ad03b
+MP_Casino01_Ad02b
+MP_Ad03b
+MP_Ad02b
+MP_Ad01b
+MP_RackFiles03_D
+MP_Massive_CrateWrappedShipping01_D
+MP_Massive_CrateWrappedShipping01b
+MP_Massive_CrateWrappedShipping01c
+MP_Massive_Box07
+MP_Massive_Box07b
+06_VendingMachine01_Massiv_E
+06_VendingMachine02_Massiv_E
+99_Billboard01_E
+MP_Casino01_Ad01_D
+MP_Massive_PosterDisplay01c5_D
+MP_Massive_PosterDisplay01c3
+MP_Massive_ChinesePosters01h_D
+MP_Massive_CasinoSign01a_E
+MP_Massive_AdboardSha01_D
+MP_DantesAd02_D
+MP_Dantes_Ad01_D
+MP_Casino_Ad01_D
+MP_Casino02_Ad01_D
+MP_Casino01_Ad05
+MP_Casino01_Ad04
+MP_Casino01_Ad03
+MP_Casino01_Ad02_D
+Massive_Poster10_D
+Massive_Poster09_D
+Massive_Poster08_D
+Massive_Poster07_D
+Massive_Poster04_D
+Massive_Poster03_D
+Massive_AdboardSha03Glow_E
+Massive_AdboardSha02Glow_E
+Massive_AdboardSha01Glow_E
+```
+
+Now let's try to build something suplying textures.
+
+# Building the ads function.
+
+So, we should have 3 blocks:
+
+- `Inventory Object` block, describing all ads placements on a level
+- `Order`, which we will have 1 of
+- `Assets` for `Order`, where we will describe our ads
 
