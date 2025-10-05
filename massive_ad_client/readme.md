@@ -1472,11 +1472,268 @@ Massive_AdboardSha01Glow_E
 
 Now let's try to build something suplying textures.
 
-# Building the ads function.
+# Building the ads function (and doing a lot of other things) in 16 hours.
 
-So, we should have 3 blocks:
+> After a wrote a title for this part, I took a week long break from working on the Massive Ad Client. And then a week later I suddenly got inspired and spend 16 hours in sitting working on it. And so in this 16 hours a lot of things were discovered. But I'm getting ahead of myself, let's proceed from where I left last time.
+
+While symbols are a great way to peak into the original code and reversing stuff, the moment I actually checked v3 of the Massive Ad Client I realized that `EnterZone` reply is different from v4.
+
+In v4 we have 3 blocks
 
 - `Inventory Object` block, describing all ads placements on a level
-- `Order`, which we will have 1 of
-- `Assets` for `Order`, where we will describe our ads
+- `Order`, which set rules for showing the ads
+- `Assets` for `Order`, where ads media objects are described
 
+In v3 howere we have 2: `Inventory Object` and `Assets`. In v3 `Order` block data in bundled with `Assets`. I still haven't figured all the fields, but those are probably the same fields as in `Order` v4.
+
+```rust
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ZoneEnterV3ResponseMADFields {
+    IECount = 0x25,    //U16
+    AssetCount = 0x01, //U16
+    IEBlock = 0xDD,
+    AssetBlock = 0xDE,
+}
+
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ZoneEnterIEResponseMADFields { //Same for v3 and v4
+    IEAssetArray = 0x24,           // U32 array !!!Mandatory!!!
+    IEAngleThreshold = 0x08,       // Float
+    IEDistanceThreshold = 0x09,    // Float
+    IESizeThreshold = 0x0a,        // U16
+    IEMediaType = 0x0b,            // U32 !!!Mandatory!!!
+    IEAdjustment = 0x23,           // Float
+    IEId = 0x26,                   // U32 !!!Mandatory!!!
+    IEName = 0x27,                 // String !!!Mandatory!!!
+    IERotationType = 0x28,         // U16 !!!Mandatory!!!
+    IEPrimaryMatchListSize = 0x2e, // U8 !!!Mandatory!!!
+}
+
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ZoneEnterV3AssetBlockResponseMADFields {
+    AssetExpiration = 0x02, //U64? !!!Mandatory!!!
+    unk2 = 0x03,               //U32
+    AssetHash = 0x04,             //Byte Array !!!Mandatory!!!
+    AssetId = 0x05,             //U32 !!!Mandatory!!!
+    unk3 = 0x06,             //U32 !!!Mandatory!!!
+    AssetSize = 0x07,             //U32 !!!Mandatory!!!
+    AssetAngleTreshold = 0x08,             //F32
+    AssetDistanceTreshold = 0x09,             //F32
+    AssetSizeTreshold = 0x0a,             //U16
+    AssetMediaType = 0x0b,             //U32 !!!Mandatory!!!
+    AssetUrl = 0x0c,              //String !!!Mandatory!!!
+    unk5 = 0x15,           //U32 Crex? !!!Mandatory!!!
+} 
+
+```
+And by constructing a very crude
+
+```rust
+
+let mut reply = MADReply::new(
+        MadServerProtocolVersion::Version3,
+        MadReplyTaskId::EnterZone,
+    );
+
+    let inventory_elements_count: u16 = 1;
+    reply.add_u16(
+        ZoneEnterV3ResponseMADFields::IECount,
+        inventory_elements_count,
+    );
+
+    let assets_count: u16 = 1;
+    reply.add_u16(ZoneEnterV3ResponseMADFields::AssetCount, assets_count);
+
+    let mut ie_item: Vec<u8> = Vec::new();
+    ie_item.write_u8(ZoneEnterIEResponseMADFields::IEAssetArray.into());
+    ie_item.write_u16::<BigEndian>(1);
+    ie_item.write_u32::<BigEndian>(1);
+
+    ie_item.write_u8(ZoneEnterIEResponseMADFields::IEMediaType.into());
+    ie_item.write_u32::<BigEndian>(MadAssetType::MAD_MEDIA_IMAGE_DXT1.into());
+
+    ie_item.write_u8(ZoneEnterIEResponseMADFields::IEId.into());
+    ie_item.write_u32::<BigEndian>(1);
+
+    let url = "MP_Casino01_Ad02b_CorrA";
+
+    ie_item.write_u8(ZoneEnterIEResponseMADFields::IEName.into());
+    ie_item.write_u16::<BigEndian>(url.len() as u16);
+    ie_item.extend_from_slice(url.as_bytes());
+
+    // Rotation_None	0
+    // Rotation_Any	1
+    // Rotation_LineOfSight	2
+
+    ie_item.write_u8(ZoneEnterIEResponseMADFields::IERotationType.into());
+    ie_item.write_u16::<BigEndian>(1);
+
+    ie_item.write_u8(ZoneEnterIEResponseMADFields::IEPrimaryMatchListSize.into());
+    ie_item.write_u8(0);
+
+    reply.add_block(ZoneEnterV3ResponseMADFields::IEBlock, &ie_item);
+
+    //================================
+
+    let url = "/assets/test.dds";
+    let path = Path::new("./assets/test.dds");
+
+    let mut file = File::open(&path).unwrap();
+
+    let metadata = file.metadata().unwrap();
+    let file_size = metadata.len();
+    info!("file_size: {file_size}");
+
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer).unwrap();
+
+    // Compute MD5 hash
+    let md5 = md5::compute(&buffer);
+
+    let mut asset: Vec<u8> = Vec::new();
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetExpiration.into());
+    asset.write_u64::<BigEndian>(1735689600000 + 86400);
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetHash.into());
+    asset.write_u16::<BigEndian>(md5.len() as u16);
+    asset.extend_from_slice(md5.0);
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetId.into());
+    asset.write_u32::<BigEndian>(1); //ID!!
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::unk3.into());
+    asset.write_u32::<BigEndian>(0xFFAABBCC); 
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetSize.into());
+    asset.write_u32::<BigEndian>(file_size as u32); //SIZE 
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetMediaType.into());
+    asset.write_u32::<BigEndian>(MadAssetType::MAD_MEDIA_IMAGE_DXT1.into());
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetUrl.into());
+    asset.write_u16::<BigEndian>(url.len() as u16);
+    asset.extend_from_slice(url.as_bytes());
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::unk5.into());
+    asset.write_u32::<BigEndian>(1);
+```
+
+I begin trying to send data. As you can guess - with no success at all. At first it was some issues with missing data, which I debugged with breakpoints, but after that it become rather clear that I'm not supplying a correct name for the `Iventory Element`. What do?
+
+If we imagine the code flow for the ads thing, there should be a function performing a "if name is correct" check. Which should access the name in the memory. And since we know exactly where object is created, thanks to the symbols, we can quite easily setup an access breakpoint.
+
+**Step 1 - locate the function, that creates `MassiveAdObjectTexture`**
+
+![alt text](img/create_massive_ie_object.png)
+
+**Step 2 - set a breakpoint in it**
+
+![alt text](img/break_point.png)
+
+**Step 3 - make it run, and setup a breakpoint in name**
+
+![alt text](img/name_breakpoint.png)
+
+**Step 4 - hope that memory is not dynamic, name is not accessed by anything else and the function we caught is actually one we need**
+
+![alt text](img/hope.png)
+
+**Step 5 - realize that you had found the most important function for this project**
+
+![alt text](compare_strings.png)
+
+Let me explain a bit.
+
+So this breakpoint, a little bit of cross reference with Sk8te symbols and some more debugging made me realized that I stuck gold. This function, named `CompareStrings` is a Massive Ad Client internal function, present in both version 3 and 4, which is used to check if an object, request by the game, is present in data, that came from the server.
+
+Not only that, but one of the functions (and the most important one, named `FindMAO`) calling it also has a log line, which made it exceptional easy to search and hook.
+
+![alt text](img/find_mao.png)
+
+Which makes it possible to make a simple dumper for ads names and easily add support to any PC game.
+
+With my newly gained power I quickly learned that Vegas 1 on Casino level requests:
+
+-`StaticMeshActor_32`
+-`R6BreakableActor_44`
+-`R6BreakableActor_46`
+-`R6BreakableActor_46`
+-`R6BreakableActor_175`
+-`R6BreakableActor_176`
+-`R6BreakableActor_179`
+-`R6BreakableActor_9`
+-`R6BreakableActor_32`
+-`R6BreakableActor_140`
+-`R6BreakableActor_178`
+
+I'm sorry, what? What is this naming? I looked at this for a minute, thinking if I really want to bother and switched back to NFS:Carbon. Sorry Vegas, next time I guess.
+
+Thankfully, ads names in NFS:Carbon are actually makes sense and are the same as the names of texture files.
+
+-`ADS_MAZDAMX5_02_D`
+-`ADS_FASTFOOD_01_D`
+-`ADS_TMOBILE_02_D`
+-`ADS_MAZDASPEED3_01_D`
+-`ADS_KNN_01_D`
+-`ADS_AUTOZONE_02_D`
+
+## Wasting 8 hours of my life due to protocol being idiotic
+
+When I switched back to NFS:Carbon and fixed all the bugs I could figure out I hit the wall. Game properly parsed my data, it properly requested the texture file and then absolutely nothing.
+
+I changed the values I sent, I debugged the code, I run every related function step by step, nothing.
+
+![alt text](img/nothing.png)
+
+This damn billboard refused to change.
+
+I decided to check the remnants of logging system, hoping I can get some data.
+
+![alt text](img/failed_to_download.png)
+
+Okay, that's something. I checked and double checked the file serving code. I even confirmed though memory that the file I was sending was in process memory. So I figured out it was some checks we weren't passing. That thought lead me to a function of 
+
+![alt text](img/verify_binary_download.png)
+
+First check was verifying the size and the second one was verifying the md5 hash. I could see me passing the size check, but failing the md5 check.
+
+```rust
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetHash.into());
+    asset.write_u16::<BigEndian>(md5.len() as u16);
+    asset.extend_from_slice(md5.0);
+```
+
+Game was reading a byte buffer, I was sending md5 as bytes. I could very easily verify that my hash is correct, since the game was generating the very same hash in this function.
+
+And after all of that, which took me 8 hours, I finally realised that game was expecting md5 hash as string in the byte buffer.
+
+```rust
+    let md5 = md5::compute(&buffer);
+
+    let md5_string = format!("{:x}",md5);
+
+    asset.write_u8(ZoneEnterV3AssetBlockResponseMADFields::AssetHash.into());
+    asset.write_u16::<BigEndian>(md5_string.len() as u16);
+    asset.extend_from_slice(md5_string.as_bytes());
+```
+
+Why? Who knows! Why I didn't catch it sooner, when `Verify` function was returning `0`? Who knows! That's RE for you. Being dumb is a part of the journey.
+
+But after all of that, it finally worked.
+
+![alt text](img/nfs_in_game.png)
+
+19 years since NFS: Carbon release and 13 years since Massive Interactive closure the system for in-game ads was working again. Good job me!
+
+Oh and, I did get back to Vegas 1 and made it work.
+
+![alt text](img/vegas.png)
+
+# What's next?
+
+While technically I achieved my goal, this is a mere proof of concept at this point. I still need to finish the server code, so I can put it on github without too much shame. Plus a dumper for ads names. Plus v4 support (this probably will be a separate write-up). Plus v1 and v2 research and support, just because I can.
+
+Thanks to making it this far. And thanks to halvors, lasercar and RedLine for their support and listening to my rumblings.
