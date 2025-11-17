@@ -455,5 +455,288 @@ After implementing all of those in the code I again encountered a deafening sili
 
 So for now let's switch from poking around webservice, and get to work on Medius.
 
-## Medius Part 1
+# Medius Part 2
+
+You know that popular methaphor for learning something that goes as "You stumble around bumping into the furniture but gradually you learn where each piece of furniture is." ? Yeah, so Medius gradually turned from 2m x 2m room to an Ikea in a span of 5 days.
+
+So what I researched above was a one of a kind web service with custom functionality for Motorstorm Apocalypces, which is how Medius titles add title-specific functionality, and not the Medius itself. The Medius itself is a N number of TCP and sometimes UDP servers, documentation for which is avaliable in very scarse amounts. There is potentially an article at https://wiki.hashsploit.net/PlayStation_3#Medius , but sadly it's been down for 10 years or so, so I'll have to went down that rabbit hole with a fresh look, while documenting my findings, in case somebody decided to do it all again one day.
+
+Anyway, let's start at the very beggining.
+
+But before we begin, a **huge** disclamer.
+
+As the saying goes, "We're standing on the shoulders of giants". So the following information mostly sourced from 2 repos: https://github.com/hashsploit/clank and github.com/Horizon-Private-Server/horizon-server, by **hashsploit** and **Dnawrkshp**. I don't claim their code and research as my own, and merely pull their work though me, in order to document and learn it, in order to understand the subject and create my own derevative of Medius server. So this work of mine a reflection of their achievments, to achieve my own goals. At this point in time, my work is not entirely my own. But I believe it's nececery for engeneers of current day to consume all avaliable knowledge made by prior engeneers, to get further with research and push bondaries of what is possible. With this aside, let's proceed with picking Medius apart.
+
+## SCE-RT protocol
+
+The underlying protocol of Medius server is `Sce-rt` which was made by RTIME Inc. somewhere in the mid 90s. This means, that we would be dealing with a lot of abstractions and decisions, which were common during that era. By that I mean bits sized data, no data types, since json haven't consumed the minds of developers and so and so.
+
+In early 00s RTIME Inc. was purchased by Sony, and then implemented as a part of Medius, which was used from 2001 to 2011 (and potentially further). 
+
+At this point in time we don't have access to **hashsploit** RE notes about the protocol, so for now that's all the information I posses on the matter.
+
+A generic SCE-RT protocol message looks like
+
+```
+XX - task id, where most sagnificant bit indicates encryption
+YY YY - size of the payload, as LE u16
+AA BB ... - payload
+```
+
+in case of encrypted packet the payload looks like
+
+```
+XX - task id, where most sagnificant bit indicates encryption
+YY YY - size of the payload, as LE u16
+ZZ ZZ ZZ ZZ - hash of the unencrypted payload, where first 3 bits indicates encryption type
+AA BB ... - encrypted payload
+```
+
+Thanks to that design, we can parse all exchange with knowing what exactly was sent
+
+### SCE-RT protocol encryption
+
+The bread and butter of any protocol is encryption, and in Medius there are 3 types of encryption used:
+
+- RSA
+- RC4
+- RCQ, which was made for PS3 version of Medius
+
+In totall, there are 7 `CipherContexts`
+
+```java
+/**
+ * The highest 3 bits of the hash. Denotes which key is used to encrypt/decrypt
+ * the respective message.
+ * 
+ * @author hashsploit
+ */
+public enum CipherContext {
+
+	ID_00(0x00),
+
+	RC_SERVER_SESSION(0x01),
+
+	ID_02(0x02),
+
+	RC_CLIENT_SESSION(0x03),
+
+	ID_04(0x04),
+
+	ID_05(0x05),
+
+	ID_06(0x06),
+
+	RSA_AUTH(0x07);
+
+	public final byte id;
+
+	private CipherContext(int id) {
+		this.id = (byte) id;
+	}
+
+}
+```
+
+RSA being used only for initial exchange of a key during auth, after which client and server switch to RC4/RCQ.
+
+While RC4 is widely known, RCQ is a unique ecnryption algorithm. Since I'm not very into encryption, I can't weight on it being bad or good or what exactly it resables. But for me it's well researched and has several implementations for me to port to Rust.
+
+### SCE-RT initial flow
+
+In order to negotiate a session key client first sent a packet of type `RT_MSG_CLIENT_HELLO (0x24)` where it sends a ans.1 certificate, unique to the game **and** game region. This potentially is validated on the server side, and in return server sends back a cert as a type `RT_MSG_SERVER_HELLO (0x25)`, which is used by all the titles:
+
+```
+SEQUENCE {
+   SEQUENCE {
+      [0] {
+         INTEGER 0x02 (2 decimal)
+      }
+      INTEGER 0x010000000000000000000000420000000000008F
+      SEQUENCE {
+         OBJECTIDENTIFIER 1.2.840.113549.1.1.5 (sha1WithRSAEncryption)
+         NULL 
+      }
+      SEQUENCE {
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.6 (countryName)
+               PrintableString 'US'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.8 (stateOrProvinceName)
+               PrintableString 'CA'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.7 (localityName)
+               PrintableString 'San Diego'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.10 (organizationName)
+               PrintableString 'SONY Computer Entertainment America Inc.'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.11 (organizationalUnitName)
+               PrintableString 'SCERT Group'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.3 (commonName)
+               PrintableString 'SCERT Root Authority'
+            }
+         }
+      }
+      SEQUENCE {
+         UTCTime '051122002626Z'
+         UTCTime '351121235959Z'
+      }
+      SEQUENCE {
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.6 (countryName)
+               PrintableString 'USA'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.8 (stateOrProvinceName)
+               PrintableString 'CA'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.7 (localityName)
+               PrintableString 'San Diego'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.10 (organizationName)
+               PrintableString 'SCEA'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.11 (organizationalUnitName)
+               PrintableString 'Zipper'
+            }
+         }
+         SET {
+            SEQUENCE {
+               OBJECTIDENTIFIER 2.5.4.3 (commonName)
+               PrintableString 'MAG 20230'
+            }
+         }
+      }
+      SEQUENCE {
+         SEQUENCE {
+            OBJECTIDENTIFIER 1.2.840.113549.1.1.1 (rsaEncryption)
+            NULL 
+         }
+         BITSTRING 0x3048024100A41F758DCECD7EBFB3435A161CB589E17C0053127039255F5D1733CF6ED49BABEA3ABB7486C439B3F175DBD34F729DCD637235CFE89045DADBF69E9C0B2D30AF0203000011 : 0 unused bit(s)
+      }
+   }
+   SEQUENCE {
+      OBJECTIDENTIFIER 1.2.840.113549.1.1.5 (sha1WithRSAEncryption)
+      NULL 
+   }
+   BITSTRING 0x0327E034DBC412E75A589BC0F81BB783ED6C6144E782E3ACA1200CEBF3E664E048C3E2CDAF22494267F8E2D957E8FBD199077693E0464951575A123E61A7C51C11D7D86D49B6DAD0D27C1FC2C43C17AC33425370A73CE1DA2E5D705524807580846AED4805549678679ECE0C5BB4530D7146B378CBCB9317B1000AA622A1804A4A0854B19311981F0EB768A5D582A43015377A0F8D8624172530554CE2966A29172315A4930C9B3ED9CF79BAD0BBB0464801033C1C92C9F8B83FE2A18086B5210E5339757C9BE0B657436668CE2CC1CB57D63219C8CAD2C1C16993E5D00E43484B24576300AFFBC49183D7516A52C7B37B5AEC38D84A03EE165592C50A4BE92B : 0 unused bit(s)
+}
+```
+
+The most interesting part of this cert is 64 bytes long `BITSTRING` under `OBJECTIDENTIFIER 1.2.840.113549.1.1.1 (rsaEncryption)` located at offset `0x183`, which is used as a modulus for the RSA part of negotiation.
+
+After that client and server shares packets `RT_MSG_CLIENT_CRYPTKEY_PUBLIC (0x12)` and `RT_MSG_SERVER_CRYPTKEY_PEER (0x13)` during which they setup a RC4/RCQ session key.
+
+But, lucky for us, replacing that `BITSTRING` with 64 zeroes **completely disables session ecnryption**.
+
+As for now, I haven't proerly understand the session key negotiation, so my server operates with encryption-less mode. I'll update this section with full explanation later, when I get to the bottom of it.
+
+### SCE-RT and Medius
+
+After the session key is negotiated (or not) Medius client send `RT_MSG_CLIENT_CONNECT_TCP (0x00)` which contain yet another rsa key and game id, and indicates that connection is setup and ready to be used.
+
+After that `RT_MSG_SERVER_CONNECT_REQUIRE (0x22)` and `RT_MSG_CLIENT_CONNECT_READY_REQUIRE (0x23)` and some others, which are currently not fully understood by me.
+
+After all of above client begin sending Medius payloads in packets of type `RT_MSG_CLIENT_APP_TOSERVER` or `RT_MSG_CLIENT_MULTI_APP_TOSERVER`, which contain Medius specific data, which are not related to `SCE-RT` protocol inner working.
+
+For now we'll put `SCE-RT` aside and talk a bit about Medius architecture as a whole, before continuing to talking about games.
+
+## Medius architecture
+
+This is where things became chaotic, but as I gradually emerge into the topic, I hope they will get less chaotic. So bear with me on this facinating adventure.
+
+Medius consists of ~5 components:
+
+- MUIS or Medius UnIverse Server, which servers a similiar purpose to `gosredirector` of Blaze, where it points client to a `Universe` or server for the game
+- MAS, or Medius Account Server
+- MLS
+- NAT
+- DME
+
+Initially, game connects to MUIS, get all the universe data, and then proceeding to connect to all others servers, using the same `SCE-RT` protocol.
+
+So, for now, as we gradually going deeper, let's task about MUIS.
+
+### MUIS
+
+Right of the bat it should be noted that Sony cared enough for separating servers per region, so there are several regions (at least in PS3 version, I'll neglect talking about PS2 version, since I work with PS3 titles here), but in titles I've seen so far:
+
+- SCEA, for US
+- SCEE, for EU
+- SCEK, for Korea
+- SCEJ, for Japan
+
+Those controls port of MUIS server, domains, title id, encryption keys, cert and some other values.
+
+So for my EU Motorstorm copy MUIS port is `10071`, when for US copy of `MAG` beta it's `10073`
+
+Initial ecnrypted exchange with MUIS server looks like:
+
+```
+Packet 1435089515.883042: ID=36  Type=RtMsgClientHello
+Payload hex: 240d03010071000...
+------------------------------------------------------------
+Packet 1435089516.033347: ID=37  Type=RtMsgServerHello
+Payload hex: 25f10271000006e70...
+------------------------------------------------------------
+Packet 1435089516.085107: ID=18  Type=RtMsgClientCryptkeyPublic
+Payload hex: 924000357126f2eeeaae7b0835a5b78327b742f5a01557f91a62f1aa635b9b6feccad78b135e7b9d5e3a15adeaba30c805d1140ee3fa0d57459324badf66c7e9aeb57a295e5936
+------------------------------------------------------------
+Packet 1435089516.178679: ID=19  Type=RtMsgServerCryptkeyPeer
+Payload hex: 934000e54268f05b0a06876467df96c383508c5877350998f00e89e3e20bbc44b1a4641a04648649e2a910cfcf46e6d2b828212b35279ac0c1d589338adc77120ca9b6c3761d50
+------------------------------------------------------------
+Packet 1435089516.21657: ID=0  Type=RtMsgClientConnectTcp
+Payload hex: 804800de09c179db8011b8649e06ff0ce6c96d8152ddf6a98e502d8ebd2dad9ba4c7697a30732c7a290cc2b9a145593cdef6d0f0c3f89ce1d91bf4b3f8c7754e8754c29d141dc279b4ded3684cf1c0
+------------------------------------------------------------
+Packet 1435089516.358602: ID=34  Type=RtMsgServerConnectRequire
+Payload hex: a2030039308a669ab04f
+------------------------------------------------------------
+Packet 1435089516.416665: ID=35  Type=RtMsgClientConnectReadyRequire
+Payload hex: a30100376f8c661f
+------------------------------------------------------------
+Packet 1435089516.531685: ID=60  Type=RtMsgServerMultiAppToClient
+Payload hex: bc5e001682446ec18bcf4d31e4ce8ce2007fbf8db44c9411060df824ef7e0cb6125b9a9e03edb03d95b84217103f9b03886648321ed27dc5938d6826551696905bbb78bfcd01afb132027fd294f4557eb1a2c920cb4224166040db4923c33f53d21b9320c1
+------------------------------------------------------------
+Packet 1435089516.584452: ID=33  Type=RtMsgClientConnectReadyTcp
+Payload hex: a10200356e8c6634ff
+------------------------------------------------------------
+Packet 1435089516.676128: ID=60  Type=RtMsgServerMultiAppToClient
+Payload hex: bc1000af78e87b1f0480c01c289db24e19f730b02e9078
+------------------------------------------------------------
+Packet 1435089516.684449: ID=31  Type=RtMsgServerEcho
+Payload hex: 9f0800a337d97c7eeea12102c86210
+------------------------------------------------------------
+Packet 1435089516.750459: ID=11  Type=RtMsgClientAppToServer
+Payload hex: 8b26009ae0246ac9bb24a97461e3358e48fd75d2cbb3b38219fe06d6438fea928b4cf6dcc91148fbbeca01d9b0
+```
 
