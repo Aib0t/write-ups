@@ -1332,3 +1332,258 @@ But that tiny change was finally the one that made me able to proceed further, a
 
 
 # Medius Part 4 - MAS
+
+After I got to MAS, implemented everything up to `TicketLogin`, which require some form of auth or a placeholder of it, I decided that it's finally time to add some polish to the structure. In terms of any Rust project we're not yet at traits state, since it's hard to think with traits until dust is settled, but we're defenetely in "workspace" state.
+
+So I refactored everything into managable parts, put servers into libs, and so and so, which resulted in:
+
+```
+.
+├── Cargo.lock
+├── Cargo.toml
+├── medius-common
+│   ├── Cargo.toml
+│   └── src
+│       ├── crypto
+│       │   ├── mod.rs
+│       │   └── rcq.rs
+│       └── lib.rs
+├── medius-mas
+│   ├── Cargo.toml
+│   └── src
+│       ├── lib.rs
+│       ├── medius_message
+│       │   ├── get_universe_information.rs
+│       │   ├── mod.rs
+│       │   ├── session_begin.rs
+│       │   ├── set_localization_params.rs
+│       │   └── ticket_login.rs
+│       ├── medius_router.rs
+│       ├── router.rs
+│       └── rt_messages
+│           ├── mod.rs
+│           ├── rt_client_connect_ready_require.rs
+│           ├── rt_client_connect_tcp.rs
+│           ├── rt_connect_complete.rs
+│           └── rt_msg_client_hello.rs
+├── medius-muis
+│   ├── Cargo.toml
+│   └── src
+│       ├── lib.rs
+│       ├── medius_message
+│       │   ├── get_universe_information.rs
+│       │   ├── mod.rs
+│       │   ├── session_begin.rs
+│       │   ├── set_localization_params.rs
+│       │   └── ticket_login.rs
+│       ├── medius_router.rs
+│       ├── router.rs
+│       └── rt_messages
+│           ├── mod.rs
+│           ├── rt_client_connect_ready_require.rs
+│           ├── rt_client_connect_tcp.rs
+│           ├── rt_connect_complete.rs
+│           └── rt_msg_client_hello.rs
+├── medius-serializable
+│   ├── Cargo.toml
+│   └── src
+│       ├── common.rs
+│       ├── lib.rs
+│       ├── medius
+│       │   ├── medius_message_type.rs
+│       │   ├── medius_packet.rs
+│       │   └── mod.rs
+│       └── scert
+│           ├── mod.rs
+│           ├── scert_message_type.rs
+│           └── scert_packet.rs
+├── medius-server
+│   ├── Cargo.lock
+│   ├── Cargo.toml
+│   └── src
+│       ├── logger.rs
+│       └── main.rs
+├── medius-title-data
+│   ├── Cargo.toml
+│   └── src
+│       └── lib.rs
+```
+
+Potentially, routers, handles and whatnot can be implemented as a trait and moved to a separate crate, but I'll think about it later. Again, judging by Horizon codebase, Medius is a very chaotic beast, so it's hard to say for sure, if my approach is the correct one.
+
+But let's get back to passing the auth.
+
+`TicketLogin` is a pretty big step in MAS, since you need either tell client to register or return the user some tasty login data.
+
+in Horizon code we have a rather complicated structure of
+
+```C#
+            if (ticket == true)
+            {
+                data.ClientObject.Queue(new MediusTicketLoginResponse()
+                {
+                    MessageID = messageId,
+                    AccountID = data.ClientObject.AccountId,
+                    AccountType = MediusAccountType.MediusMasterAccount,
+                    ConnectInfo = new NetConnectionInfo()
+                    {
+                        AccessKey = data.ClientObject.Token,
+                        SessionKey = data.ClientObject.SessionKey,
+                        WorldID = Program.Manager.GetOrCreateDefaultLobbyChannel(data.ApplicationId).Id,
+                        ServerKey = new RSA_KEY(), //Program.GlobalAuthPublic,
+                        AddressList = new NetAddressList()
+                        {
+                            AddressList = new NetAddress[Constants.NET_ADDRESS_LIST_COUNT]
+                            {
+                                new NetAddress() {Address = Program.LobbyServer.IPAddress.ToString(), Port = (uint)Program.LobbyServer.Port, AddressType = NetAddressType.NetAddressTypeExternal},
+                                new NetAddress() {Address = Program.Settings.NATIp, Port = (uint)Program.Settings.NATPort, AddressType = NetAddressType.NetAddressTypeNATService},
+                            }
+                        },
+                        Type = NetConnectionType.NetConnectionTypeClientServerTCP
+                    },
+                    MediusWorldID = Program.Manager.GetOrCreateDefaultLobbyChannel(data.ApplicationId).Id,
+                    StatusCode = MediusCallbackStatus.MediusSuccess
+                });
+```
+
+Which instantly add a lot of objects, like `channels`, `AccessKey`, `SessionKey`, `LobbyServer` and `NATService`.
+
+Well, In order to proceed we would need to implement all of those, and with scary stuff like `channels` and `NATService` I'm not really sure how far we can get bullshitting our way into the depths of this Sony made hell.
+
+At this point in time a reader might finally asks "Why bother with rewriting all of it into inferior version in Rust, instead of fixing the opensource code wich does have all those features?" The answer is still the same - to actually learn it! Plus, I don't know C# and can't write it. And additionally to this, Microsoft still haven't fixed a bug, where DotNet projects can't be compiled under linux with custom kernels, since it doesn't pass the regex check (It's been 3 years!). So I have the only one realistic option, and it being rewriting it all in Rust myself.
+
+Anyway, let's proceed with bullshitting our way.
+
+My bold approach of copying code and sending all zeroes didn't work, so let's get back to rpcs3 debugger while documenting my actions.
+
+The packet starting with
+
+```Rust
+    let mut payload = Vec::new();
+
+    payload.write_u8(0x04).unwrap(); // LobbyExt
+    payload.write_u8(0x59).unwrap(); // TicketLoginResponse
+```
+
+Then we add message id, pad, result code and another pad
+
+```Rust
+    payload.extend_from_slice(&incoming_message_id);
+
+    payload.extend_from_slice(&[0; 3]); // pad
+
+    payload.write_i32::<LittleEndian>(0).unwrap();
+
+    payload.extend_from_slice(&[0; 29]); // pad
+```
+
+Then we add account id, account type and world id 
+
+```Rust
+    payload.write_i32::<LittleEndian>(1).unwrap(); // AccountID
+
+    payload
+        .write_i32::<LittleEndian>(MediusAccountType::Master as i32)
+        .unwrap();
+
+    payload.write_i32::<LittleEndian>(11).unwrap(); // MediusWorldID
+```
+
+And after that we met with the final boss in form of `NetAddressList`
+
+```Rust
+ //NetInfo block
+
+    payload.write_i32::<LittleEndian>(1).unwrap(); // Type
+
+    //Always 2 adr, but whatever
+
+    //Lobby
+
+    payload.write_i32::<LittleEndian>(1).unwrap(); // NetAddressTypeExternal
+    write_fixed_string(&mut payload, "127.0.0.1", 16);
+    payload.write_i32::<LittleEndian>(10075).unwrap();
+
+    //NAT
+
+    payload.write_i32::<LittleEndian>(3).unwrap(); // NetAddressNATService
+    write_fixed_string(&mut payload, "127.0.0.1", 16);
+    payload.write_i32::<LittleEndian>(10080).unwrap();
+
+
+    payload.write_i32::<LittleEndian>(11).unwrap(); // MediusWorldID
+    payload.extend_from_slice(&[0xBA; RSA_KEY_LEN]);
+    payload.extend_from_slice(&[0xFF; ACCESS_KEY_LEN]);
+    payload.extend_from_slice(&[0xAB; SESSION_KEY_LEN]);
+```
+
+You probably aren't suprised that this didn't work on my first try, so it's time to properly dissect the code in Ghidra and rpcs3 debugger.
+
+While I was succesfull with finding the function of `MediusUniqueCallbackTicketLoginResponseHandler` I wasn't hitting the function. But, since it was like day 3 with this function, and it worked previously, I knew that something was off. Just to be sure I added a dummy 
+
+```
+payload.extend_from_slice(&[0xCC; 64]);
+```
+
+at the end, and only then I begin hitting the breakpoint. So now we know that replies in Medius has an early size check somewhere in the code! This is a pretty big finding, since we can verify the if our reply is correct, based on this behavior.
+
+Suprisingly, after I added that padding... game begin sending requests to port 10075 I defined in the reply. Huh?
+
+Well. I guess we're good? It's hard to say. But let's go deeper.
+
+# Medius Part 5 - MLS
+
+By copying code of MAS to MLS crate, and spinning it up on port 10075 I was greeted with
+
+```
+[2025-11-23T08:35:04Z DEBUG medius_serializable::scert::scert_packet] payload 9240000ad399ee4f81d039c07946d2a26ab4e4ba6ebabf3f5c1f6a6dbac79d74e888ca3919e34f854256625ae8a5323a9c7b80556d73f72e8091db0c3b41e53f42098b5205643d
+[2025-11-23T08:35:04Z DEBUG medius_serializable::scert::scert_packet] MSB is 1 -> SCERT packet is encrypted
+[2025-11-23T08:35:04Z DEBUG medius_serializable::scert::scert_packet] Packet type: RtMsgClientCryptkeyPublic | encrypted: true | cypher: ID_00
+
+thread 'tokio-runtime-worker' panicked at /home/aibot/Documents/develop/dumb-server2/medius-mls/src/router.rs:34:13:
+not yet implemented
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+
+(Yes, project is called `dumb-server2`)
+
+Well, it was fun while it lasted, and now we're at the part where we MUST implement the encryption and we can't bypass it like we did. 
+
+OR DO WE?
+
+Since the check in the SCERT code only checks if key is zeroes, I step back, changed 
+
+```Rust
+    payload.extend_from_slice(&[0x00; RSA_KEY_LEN]);
+    payload.extend_from_slice(&[0x00; ACCESS_KEY_LEN]);
+    payload.extend_from_slice(&[0x00; SESSION_KEY_LEN]);
+
+    payload.extend_from_slice(&[0x00; 64]); // Very bad padding to bypass the length check. Shouldn't exists, fix one day
+```
+
+And we're back to our happy unencrypted state
+
+```
+[2025-11-23T08:38:58Z DEBUG medius_serializable::scert::scert_packet] payload 0b2800045d350000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffff
+[2025-11-23T08:38:58Z DEBUG medius_serializable::scert::scert_packet] Packet type: RtMsgClientAppToServer | encrypted: false | cypher: ID_00
+
+thread 'tokio-runtime-worker' panicked at medius-serializable/src/medius/medius_packet.rs:383:89:
+called `Result::unwrap()` on an `Err` value: TryFromPrimitiveError { number: 93 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+
+Good! And bad, since we don't have a packet type of 0x5d for Medius in Horizon codebase. But it does exists in some others based on it, so now we know that
+
+```
+MatchGetSupersetListRequest = 0x5D,
+```
+
+Better
+
+```
+[2025-11-23T08:51:49Z DEBUG medius_serializable::scert::scert_packet] Packet type: RtMsgClientAppToServer | encrypted: false | cypher: ID_00
+[2025-11-23T08:51:49Z DEBUG medius_mls::router] MediusMessage { class: MessageClassLobbyExt, msg_type: LobbyExt(MatchGetSupersetListRequest), payload: [53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255] }
+```
+
+And now we're stepping into very dangerous territory of Lobby server. Those beasts could be rediculous in size and complexity, and everything we did before will look so simple, once we pass every call.
+
