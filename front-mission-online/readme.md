@@ -33,6 +33,7 @@ And some less notable others.
 While Tetra Master and Final Fantasy XI were released in US version of PlayOnline, Front Mission Online never left Japan and was a very short lived title - from 2005 to 2008. This makes Front Mission Online a very obscure title with next to none publicly available research and data. I was thinking that that's pretty much it - pc version doesn't launch, ps2 version doesn't login, but I keep googling and whenever I searched for `PlayOnline` I stumbled into 1000 of pages about Final Fantasy XI. And checking pages related to it made me quickly realize - it's for better or for worse is very popular. So popular there are custom servers and a lot of tools. And custom servers means somebody knows something about `PlayOnline`.
 
 And I also had a feeling that those games were using a very similar backend, due to them being released at the same time by the same studio and looking very similar.
+
 ![alt text](img/fmo_ingame.png)
 
 ![alt text](img/ffxi_ingame.png)
@@ -511,9 +512,366 @@ And sure enough at offset `0x10067c48 + 0x390` there was a function taking 2 arg
 
 This is gonna take a while.
 
-## Chapter 4 - Making it right
+## Chapter 4 - Making it run
 
-And so, I'm present with a complicated choice. On one hand, figuring out how to properly initialize `polcore` object will be faster and probably could be done via `PlayOnline Viewer`. On the other hand, going forward full RE of `polcore` is beneficial going forward for preservation and future of not only Front Mission Online, but other titles.
+So, after a lot of trial and error my issue finally had boiled down to 1 particular point.
 
-But while doing it in C++ is probably how it should be done, I don't know C++ and don't want to learn it via this rather monumental task. Doing it in Rust is, well, strange. It will require me convert everything from less than ideal C++ code for Windows 95 into modern equivalent, and doing it for ~470 functions sounds like way above my pay grade of zero. At the same time there is a big difference between something existing and something that don't, so I decided that I can at the very least try to. Plus my gut feeling was telling me that there is not exactly 470 different functions, but somewhere around 100 unique functions. And so, I begin working on a `polcore-rs`.
+Say hello to `DAT_613b7038`. `DAT_613b7038` is a cunt. It's initialized in as cunty as it is function of `FUN_6106d710` as
 
+```C
+DAT_613b7038 = DAT_613cee60;
+```
+
+The bad thing is that `FUN_6106d710` is never called, resulting in a nullptr in another function of `FUN_6104f940`
+
+```
+        6104f965 8b 0d 38        MOV        ECX,dword ptr [DAT_613b7038]
+                 70 3b 61
+        6104f96b 56              PUSH       ESI
+        6104f96c e8 5f 9b        CALL       CRASH_HERE
+                 1c 00
+```
+
+And so going in circles for 3 days I still had only a rought idea of that something was related to symbols and me not properly setting `polcore`.
+
+Yes, you might say that `hey, just trace everything calling it and what writes to DAT_613cee60` but that lead me to nowhere. Such situations happen, not my first rodeo.
+
+So instead I decided to change approach and try to find out how `polcore` is being setup. 
+
+### Symbols
+
+I haven't mention it yet, but there are *some* symbols for `PlayOnline`. Well, not for `polcore`, but for Final Fantasy XI for PS2. So I decided that it's better than nothing and take a brief look into it. Who knows, maybe there is something of a use.
+
+![alt text](img/ffxi_sq.png)
+
+Well, there is something related to `POL` I suppose. I tried to cross reference 1 function I knew that was called for sure
+
+```C
+void sqLanguageSetCurrentCode(undefined4 param_1)
+
+{
+  _CurrentLanguage = param_1;
+  return;
+}
+```
+
+which looked quite close to `polcore.dll` one
+
+```C
+void SET_LANG_CODE(undefined4 param_1)
+
+{
+  LANG_CODE = param_1;
+  return;
+}
+```
+
+Then I thought "Well, I have some logging in `polcore.dll` maybe it will help". Searching for a known logging string of `sqPolconOpenCheck` lead me to
+
+![alt text](img/ffxi_open_check.png)
+
+And to my suprise, I found the very same function in `polcore.dll`, which I quickly cross referenced from PS2 binary
+
+![alt text](img/polcore_open_check.png)
+
+And then it hits me. While on PC we had all of `polcore` functionality as a separate dll, on PS2 it was backed into PS2 binary. But the decompiled code was **the very same**. Meaning we was working with the same C source, meaning it was now possible to cross reference **everything**. I got to work, and in 3 hours I went from 1% of mapped functions to 10%, which is huge.
+
+Things turned from 
+
+```C
+int FUN_10046450(void)
+
+{
+  DWORD DVar1;
+  int iVar2;
+  undefined2 extraout_var;
+  undefined4 uVar3;
+  short local_178 [2];
+  undefined1 local_174;
+  undefined1 uStack_173;
+  undefined1 uStack_172;
+  undefined1 uStack_171;
+  undefined1 local_164 [12];
+  undefined1 local_158 [20];
+  undefined1 local_144 [68];
+  undefined1 local_100 [256];
+  
+  FUN_10049530(0);
+  if (DAT_100913f0 != DAT_10092a40) {
+    FUN_1001ca10(s_sqPolconOpenCheck:_phase_check_%_10092a50,DAT_10092a40,DAT_100913f0);
+    DAT_10092a40 = DAT_100913f0;
+  }
+  switch(DAT_100913f0) {
+  case 0:
+    DAT_1009169c = FUN_10046050();
+    DVar1 = GetTickCount();
+    _DAT_100927e0 = DVar1 / 1000;
+    iVar2 = DAT_1009169c;
+    if (-1 < DAT_1009169c) {
+      if (DAT_10091c68 != 0) {
+        if (DAT_10091c68 == 1) {
+          uVar3 = DAT_100924dc;
+          if (DAT_100924d8 == 0) {
+            uVar3 = 0xffffffff;
+          }
+          FUN_10016230(uVar3);
+          if (DAT_10091404 != 2) {
+            DAT_100913d4 = GetTickCount();
+            DAT_10091404 = 2;
+          }
+          DAT_100913f0 = 0x11;
+        }
+        else if (DAT_10091c68 == 2) goto LAB_100464ed;
+        break;
+      }
+LAB_100464ed:
+      iVar2 = -0x2c04;
+    }
+    DAT_10091404 = 0;
+    DAT_100913f0 = iVar2;
+    break;
+```
+
+to
+
+```C
+int sqPolconOpenCheck(void)
+
+{
+  DWORD DVar1;
+  int iVar2;
+  undefined2 extraout_var;
+  short local_178 [2];
+  undefined1 local_174;
+  undefined1 uStack_173;
+  undefined1 uStack_172;
+  undefined1 uStack_171;
+  undefined1 local_164 [12];
+  undefined1 local_158 [20];
+  undefined1 local_144 [68];
+  CON_STATE local_100;
+  undefined4 uVar3;
+  
+  sqPolconLock(0);
+  if (_connection_state != connection_state_prev_state) {
+    printf(s_sqPolconOpenCheck:_phase_check_%_10092a50,connection_state_prev_state,_connection_state
+          );
+    connection_state_prev_state = _connection_state;
+  }
+  switch(_connection_state) {
+  case 0:
+    last_returned_error_code = sqPolconInitSocketAPI();
+    DVar1 = GetTickCount();
+    _DAT_100927e0 = DVar1 / 1000;
+    iVar2 = last_returned_error_code;
+    if (-1 < last_returned_error_code) {
+      if (connection_type != 0) {
+        if (connection_type == 1) {
+          uVar3 = adapter_id;
+          if (DAT_100924d8 == 0) {
+            uVar3 = 0xffffffff;
+          }
+          sqInetSetActiveInterface(uVar3);
+          if (Net_state != 2) {
+            DAT_100913d4 = GetTickCount();
+            Net_state = 2;
+          }
+          _connection_state = POLCON_PHASE_NETWORK_READY;
+        }
+        else if (connection_type == 2) goto LAB_100464ed;
+        break;
+      }
+LAB_100464ed:
+      iVar2 = -0x2c04;
+    }
+    Net_state = 0;
+    _connection_state = iVar2;
+    break;
+```
+
+And the more I mapped the more I could cross reference, meaning less unknown and more known stuff. It still didn't explained the crash, but it meant that it's doable to map almost the entire `polcore.dll`, minus PC specific stuff. With mapping a sustainable portion of calls I've met to this point, I decided that it's time to search for something else. Like, a function that lauch the game in `PlayOnline Viewer`.
+
+### PlayOnline Viewer
+
+As you could probably guess at this point, launcher is also a dll, this time an `app.dll`. Applying the very same method of `seaching for code that sets the language` I found this
+
+```C
+  iVar2 = FUN_10019933("POL_LANG",unaff_EBP + -0x1a8);
+  if (iVar2 != 0) {
+    lVar6 = _atol((char *)(unaff_EBP + -0x1a8));
+  }
+  (**(code **)(polcore_common_table + 0xf14))(lVar6); // Set language offset
+  (**(code **)(polcore_common_table + 0x17dc))(lVar6 == 0);
+  (**(code **)(polcore_common_table + 0x5bc))((&PTR_s_SOFTWARE\PlayOnline_1042e9e0)[DAT_1054515c]); // Set registry offset
+  (**(code **)(polcore_common_table + 0x40c))(unaff_EBP + -0x1a8,0x100);
+  FUN_10019933("POL_UCS_AREA_KBN",unaff_EBP + -0x1a8);
+  (**(code **)(polcore_common_table + 0x1474))(unaff_EBP + -0x1a8);
+  FUN_10186d81();
+  FUN_10178cf0();
+  FUN_101867de();
+  (**(code **)(polcore_common_table + 0xe5c))();
+  (**(code **)(polcore_common_table + 0xe48))();
+  FUN_1001146a();
+  iVar2 = polcore_common_table;
+```
+
+This resulted in 2 important finds
+
+1) Turns out `polcore_common_table + 0x17dc` was the very last function in `polcore.dll` vtable, meaning there is **1529** slots to work with. Most of them are empty and I haven't bothered checking how many real functions we had.
+2) I had a rought example of what to set
+
+Sadly, implementing those in the code resulted in no changes in FMO booting, but now I had this monstrocity to interact with vtable.
+
+```Rust
+#[repr(C)]
+pub struct CommonFunctionTable {
+    pub functions: [usize; 1529], //last one at 1006942c
+}
+
+impl CommonFunctionTable {
+    const REGISTRY_LANG: usize = 965;
+    const REGISTRY_KEY: usize = 367;
+    const INSTALL_FOLDER: usize = 125;
+    const INET_MUTEX: usize = 815;
+    const JAPANESE_MODE: usize = 1527;
+
+    const POLFUNC_FFXI_LANG: usize = 0x01A4;
+
+    const POL_FILE_PATH: usize = 127;
+    const POL_LOAD_FILE: usize = 1006;
+
+    #[inline]
+    unsafe fn get<T: Sized + Copy>(&self, index: usize) -> T {
+        let addr = self.functions[index] as *const ();
+        std::mem::transmute_copy(&addr)
+    }
+
+    /// Sets PlayOnline language (0 = JP, 1 = US, 2 = EU)
+    pub unsafe fn registry_lang(&self, lang: i32) {
+        let f: extern "cdecl" fn(i32) = self.get(Self::REGISTRY_LANG);
+        f(lang);
+    }
+
+    /// Sets registry base key
+    pub unsafe fn registry_key(&self, key: *const c_char) {
+        let f: extern "cdecl" fn(*const c_char) = self.get(Self::REGISTRY_KEY);
+        f(key);
+    }
+
+    /// This one requires PlayOnlineViewer folder, which contains pol.exe, since game resolves files from it via 
+    pub unsafe fn install_folder(&self, path: *const c_char) {
+        let f: extern "cdecl" fn(*const c_char) = self.get(Self::INSTALL_FOLDER);
+        f(path);
+    }
+
+    /// Creates PlayOnline network mutex
+    pub unsafe fn inet_mutex(&self) {
+        let f: extern "cdecl" fn() = self.get(Self::INET_MUTEX);
+        f();
+    }
+
+    /// Enables Japanese mode flag
+    pub unsafe fn japanese_mode(&self, flag: i32) {
+        let f: extern "cdecl" fn(i32) = self.get(Self::JAPANESE_MODE);
+        f(flag);
+    }
+
+    /// Some language flag which appears in FFXI
+    pub unsafe fn ffxi_lang(&self, flag: i32) {
+        let f: extern "cdecl" fn(i32) = self.get(Self::POLFUNC_FFXI_LANG);
+        f(flag);
+    }
+
+
+    /// Takes a lot of data, return a path to a file, polerr.bin and others.
+    pub unsafe fn pol_file_path(&self, lang: i32, buf: *mut i8, size: i32, a: i32, b: i32) {
+        let f: extern "cdecl" fn(i32, *mut i8, i32, i32, i32) =
+            self.get(Self::POL_FILE_PATH);
+        f(lang, buf, size, a, b);
+    }
+
+    /// Load the file from path?
+    pub unsafe fn pol_load_file(&self, data: *mut c_void, size: u32) -> *mut c_void {
+        let f: extern "cdecl" fn(*mut c_void, u32) -> *mut c_void =
+            self.get(Self::POL_LOAD_FILE);
+        f(data, size)
+    }
+}
+```
+
+I won't claim this is a great approach to do it, but this is Rust-y enough way to work with it, and will serve as a great starting point later on, when I decide to re-implement the vtable.
+
+### Making it run, attempt 4
+
+At this point in time I was puzzled. So let's try to make sense out of what we know.
+
+The `DAT_613b7038` is 0. It's being initialized in `FUN_6106d710` as
+
+```C
+DAT_613b7038 = DAT_613cee60;
+```
+
+`DAT_613cee60` is being written only in 1 location
+
+```
+6100b539		MOV [DAT_613cee60],EAX	Write
+6100b543		MOV ECX,dword ptr [DAT_613cee60]	Read
+6106d713		MOV EAX,[DAT_613cee60]	Read
+```
+
+Where it is set as
+
+```C
+    pHStack_19bc = (HKEY)operator_new(0x34);
+    uStack_4 = 8;
+    if (pHStack_19bc == (HKEY)0x0) {
+      DAT_613cee60 = 0;
+    }
+    else {
+      DAT_613cee60 = FUN_61219a60();
+    }
+```
+
+What `FUN_61219a60` does?
+
+```C
+
+void __fastcall FUN_61219a60(undefined4 *param_1)
+
+{
+  *param_1 = 0;
+  param_1[2] = 0;
+  return;
+}
+
+```
+
+Strange, seems like decompilation is lying to us.
+
+Well, I opted for manually patching value of `DAT_613b7038` to value of `DAT_613cee60` and that finally
+
+![alt text](img/fmo_runs.png)
+
+resulted in it loading! Well, it was too early for anything sustainable and real, but we were finally in game! I sadly can't click anything, due to cursor and buttons non-existing, but that was definately a step forward.
+
+Machine translation of this message gave me a clue
+
+```
+An error occurred while initializing PlayOnline.
+
+[POL-0515]
+
+The connection is either disconnected or unavailable.
+
+Please try again after some time, or check your cables, connected devices, and network settings.
+```
+
+
+
+## Chapter 5 - Making it right
+
+~~And so, I'm present with a complicated choice. On one hand, figuring out how to properly initialize `polcore` object will be faster and probably could be done via `PlayOnline Viewer`. On the other hand, going forward full RE of `polcore` is beneficial going forward for preservation and future of not only Front Mission Online, but other titles.~~
+
+~~But while doing it in C++ is probably how it should be done, I don't know C++ and don't want to learn it via this rather monumental task. Doing it in Rust is, well, strange. It will require me convert everything from less than ideal C++ code for Windows 95 into modern equivalent, and doing it for ~470 functions sounds like way above my pay grade of zero. At the same time there is a big difference between something existing and something that don't, so I decided that I can at the very least try to. Plus my gut feeling was telling me that there is not exactly 470 different functions, but somewhere around 100 unique functions. And so, I begin working on a `polcore-rs`.~~
+
+TBD
