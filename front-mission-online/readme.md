@@ -866,6 +866,137 @@ The connection is either disconnected or unavailable.
 Please try again after some time, or check your cables, connected devices, and network settings.
 ```
 
+### Making it run, attempt 5
+
+2 days later, and I'm still bashing my head agaist the wall with the same issue.
+
+After 2 days I came to conclusion that problem is not function `710` not being called, but a slightly different issue.
+
+So when I'm calling so called `INET_MUTEX` which is actually called `sqPolconOpenCheck` it fails to init Pol connection with an error of 
+
+```
+sqPolconOpenCheck: phase check -1 ----> 0
+SQUARE Inet Library version 4.43 Tue Mar  9 18:02:08 JST 2004
+sqPolconOpenCheck: phase check 0 ----> -11268
+```
+
+-11268 or `-0x2c04` which is happening in
+
+```C
+  case 0:
+    last_returned_error_code = sqPolconInitSocketAPI();
+    DVar1 = GetTickCount();
+    _DAT_100927e0 = DVar1 / 1000;
+    iVar2 = last_returned_error_code;
+    if (-1 < last_returned_error_code) {
+      if (connection_type != 0) {
+        if (connection_type == 1) {
+          uVar3 = adapter_id;
+          if (DAT_100924d8 == 0) {
+            uVar3 = 0xffffffff;
+          }
+          sqInetSetActiveInterface(uVar3);
+          if (Net_state != 2) {
+            DAT_100913d4 = GetTickCount();
+            Net_state = 2;
+          }
+          _connection_state = POLCON_PHASE_NETWORK_READY;
+        }
+        else if (connection_type == 2) goto LAB_100464ed;
+        break;
+      }
+LAB_100464ed:
+      iVar2 = -0x2c04; // << Here
+    }
+    Net_state = 0;
+    _connection_state = iVar2;
+    break;
+```
+
+Due to `sqPolconInitSocketAPI` failing, which fails due to
+
+```C
+
+uint sqPolconInitSocketAPI(void)
+
+{
+  undefined4 uVar1;
+  
+  if (socket_api_initialized_flag != 0) {
+    return 1;
+  }
+  socket_api_initialized_flag = 1;
+                    /* enum PolconConnectionMode
+                       {
+                           POLCON_MODE_DIALUP  = 0,
+                           POLCON_MODE_ETHERNET = 1,
+                           POLCON_MODE_PPPOE   = 2
+                       }; */
+  if (connection_type == 0) {
+    last_returned_error_code = sqInitSocketAPI(0);
+    network_backend_mode = 0;
+    return last_returned_error_code & (-1 < (int)last_returned_error_code) - 1;
+  }
+  if (connection_type == 1) {
+    if (ethernet_subtype == 3) {
+      uVar1 = 1;
+    }
+    else {
+      uVar1 = 3;
+    }
+    last_returned_error_code = sqInitSocketAPI(uVar1);
+                    /* enum SocketBackend
+                       {
+                           SOCKET_BACKEND_DIALUP   = 0,
+                           SOCKET_BACKEND_ETHERNET = 1,
+                           SOCKET_BACKEND_ALT      = 3,
+                           SOCKET_BACKEND_PPPOE    = 2
+                       }; */
+    network_backend_mode = 1;
+    return last_returned_error_code & (-1 < (int)last_returned_error_code) - 1;
+  }
+  if (connection_type == 2) {
+    last_returned_error_code = sqInitSocketAPI(2);
+    network_backend_mode = 2;
+    return last_returned_error_code & (-1 < (int)last_returned_error_code) - 1;
+  }
+  return last_returned_error_code & (-1 < (int)last_returned_error_code) - 1;
+}
+```
+and `sqInitSocketAPI` is failing due to
+
+```C
+undefined4 sqInitSocketAPI(void)
+
+{
+  int iVar1;
+  undefined1 local_190 [400];
+  
+  if (socket_api_init_done == 0) {
+    printf(s_SQUARE_Inet_Library_version_%s_1006b940,s_4.43_Tue_Mar_9_18:02:08_JST_2004_1006baa8);
+    sqLoadIphlpapi(0);
+    sqInetStatUpdate();
+    DAT_1009f0c4 = 0;
+    DAT_1009f0c8 = 0;
+    _DAT_1009f0cc = 0;
+    _DAT_1009f0d0 = 0;
+    DAT_103ddc90 = 0;
+    iVar1 = sqInitSocketLock(&DAT_1009f0ac,s_sqinet_1006b938);
+    if (iVar1 == 0) {
+      return 0xfffffff4;
+    }
+    iVar1 = WSAStartup(0x101,local_190);
+    if (iVar1 != 0) {
+      return 0xfffff7fe;
+    }
+    socket_api_init_done = 1;
+  }
+  return 0;
+}
+```
+
+`connection_type` not being 1. And here comes an issue of "nothing write to this value and code only reads from it". 
+
 
 
 ## Chapter 5 - Making it right

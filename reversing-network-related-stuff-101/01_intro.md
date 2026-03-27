@@ -1,6 +1,6 @@
-# Analysis of unknown protocols PART 1: Introduction.
+# Analysis of unknown protocols in games. Chapter 1: Introduction.
 
-While protocols varies (http, grpc, RakNet, DNS, Mysql) their design stays the same across the board. So in this tiny lecture I'll try to explain what to look for, what to ignore and some caveats in protocol analysis.
+While protocols varies (http, grpc, RakNet, DNS, Mysql) their design stays the same across the board. So in this chapter I'll try to explain what to look for, what to ignore and some caveats in protocol analysis.
 
 Analysis of protocols shares a lot with binary file research and if you're experienced with one, you're gonna be good with another. It's all about finding out patterns and making sense out of them. It takes time, but it's a rather approachable task for a person with any skillset. 
 
@@ -16,7 +16,7 @@ Pretty much you gonna be analyzing Messages to get payload/produce messages of y
 - Payload formatting
 - Signature
 
-** Encryption**
+**Encryption**
 
 Usually includes several key exchanges, rngs, ivs and other nasty crypto stuff.
 
@@ -135,6 +135,5 @@ __**Okay, what do?**__
 After all that scary stuff above we are back to square 1 - look for patterns and similarities. Even without exact values you can figure out patterns. And then AFTER patterns you can get to figuring out values and how to write them. Write some code to read packets. Check it on all availably packets. If it fails - figure out why. The longer you stare into abyss of meaningless bytes the more meaning they have.
 
 There are also many ways to approach it from programmer perspective, but as NTAuthority told me once - "research PDB and write a client".
-
 
 Writing client is easier since it's a step by step process, rather than writing a full blow server and being overwhelmed when something out of 100 requests from the client breaks and you don't know what caused it.
