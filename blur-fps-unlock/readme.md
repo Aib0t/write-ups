@@ -988,4 +988,365 @@ And higher fps makes car to get max RPM much, much faster.
 
 ## How it was fixed?
 
-TODO
+See next chapter!
+
+# May 2026
+
+So, as some of you know, in May of 2026 Blur sources got public. This event is big by itself, but for me personally it means more than to many other people. And just like that the very first thing I did was digging thought game sources and trying to finish old unfinished business. And learn sources and all juicy details about it. I would probably make another write-up about Blur sources, but for now, let's get back to fps patch.
+
+# The culpit
+
+Navigating Blur sources is both complicated task and a simple one. It's complicated due to sheer quatity of the code here. And simple since I've been doing it for past 5 years, so I knew exactly what I need to look for.
+
+And so, by navigating to `amax/game/Game/GameWorld/GameWorld.cpp` I found the thing I needed and it finally made everything clear.
+
+The function `C_GameWorld::UpdatePhysics()` I was using before , wasn't the core function for game simulation. The correct one was `C_GameWorld::Update()`, which was calling `C_GameWorld::UpdatePhysics()`. So with everything above I was trying to fix the simptom, not the cause. The main culpit is this tiny piece of the code:
+
+```C++
+void C_GameWorld::CalcNumberOfSteps()
+{
+	// When a fractional amount of time passes (for example more than 1/30) we accumulate the
+	// fractional amount, and then add an extra step when it reached a threshold:
+	
+	F32 period = C_GameApp::GetInstance()->GetTimeStepRaw();
+	
+	m_GameFraction += period;
+
+	F32 baseRate = 60.0f;
+	Display::E_RefreshRate screenRate = Display::Device()->GetRefreshRate();
+
+	if (g_TimeStep50Hz && screenRate == Display::E_RefreshRate_50HZ)
+		baseRate = 50.0f;
+
+	// Find integer number of timesteps:
+	m_GameStep = (S32)((m_GameFraction * baseRate) + 0.5f);
+	m_GameFraction -= (F32)m_GameStep / baseRate;
+
+#if CFG_PROFILE
+	// For 50hz it's important to have more than 2 physics updates per frame in order to run at the right speed.
+	// This code will allow Jan to still profile the game (if he runs in 60hz), while automatically
+	// allowing a Profile build to run at the correct speed if we need 50hz:
+	static bool firstTime = true;
+	if (firstTime && screenRate == Display::E_RefreshRate_50HZ && g_maxPhysicsUpdates < 3)
+		g_maxPhysicsUpdates = 3;
+	firstTime = false;
+#endif
+	
+	// Don't do this here as network timers will go out of synch.
+	//if (m_GameStep > g_maxPhysicsUpdates)
+	//	m_GameStep = g_maxPhysicsUpdates;
+}
+```
+
+Which set the number of steps.
+
+With 30 fps it worked as
+
+Frame:      1  2  3  4  5 ...
+GameStep:   2  2  2  2  2 ...
+
+With 60 it becomes
+
+Frame:      1  2  3  4  5 ...
+GameStep:   1  1  1  1  1 ...
+
+And with 144 it becomes
+
+Frame:      1  2  3  4  5  6  7  8  9  10 11 12 ...
+GameStep:   0  1  0  1  0  0  1  0  1  0  1  0 ...
+
+This was generally okay, for the most part, if every called function in `C_GameWorld::Update()` honored the steps. But turns out each of called functions in `C_GameWorld::Update()` using `C_GameApp::GetInstance()->GetTimeStepRaw()` as it wishes, which resulted in a very inconsistent mess.
+
+So if we wanted to fix the game code, we would need to alter all of:
+
+```C++
+CalcNumberOfSteps();
+Scheduler::Flush(m_RaytraceGroup);
+BeginCarEffectTasks();
+ResetEnvironmentSettings();
+Game::C_PickupsManager::Instance().PreUpdateOne();
+C_DriverManager::Instance()->SetVehicleCubeMapTexture(pEnvTexAddress);
+UpdateVehicleParticleScale();
+m_pActorList->UpdateSystem(fTimeStep, m_GameFrame);
+::Actors::C_ActorUtils::Instance().RenderDynamicObjectDebugInfo();
+DynamicEffect::Light::XtInterface::Update();
+DynamicEffect::Particle::XtInterface::Update();
+DynamicEffect::Track::XtInterface::Update();
+C_GameApp::GetInstance()->GetRaceBookLayer()->GetRaceLogicLayer()->ClearImpactMessages();
+UpdatePhysics();
+::Actors::C_ActorUtils::Instance().RemoveDestroyedTriggers();
+Scheduler::AddTask(Game::DeferredImpactProcessTask, 0, 0, m_ImpactProcessGroup);
+C_GameApp::GetInstance()->GetRaceBookLayer()->GetRaceLogicLayer()->ProcessImpactMessages();
+C_GameApp::GetInstance()->GetRaceBookLayer()->GetRaceLogicLayer()->ProcessCachedEvents();
+Components::C_VehicleComponent_PlayerRubberBanding::SendGroupDataToComponents();
+m_pParticleManager->UpdateParticles(fTimeStep, 1.0f / fTimeStep);
+Game::C_PickupsManager::Instance().PreUpdateTwo();
+GlobalUpdate();
+AmaxCam::CameraSystem().CameraChangeUpdate(gamePeriod);
+Scheduler::Flush(m_ImpactProcessGroup);
+Animation::TaskManager().Flush();
+Animation::TaskManager().ClearStats();
+AnimatedModel::TaskManager().Flush();
+m_pActorList->Update(fTimeStep);
+GetActorList()->GetSubscriberSystem().BroadcastMessage(Game::E_GameMsg_UpdateLifeTime);
+GetActorList()->GetSubscriberSystem().BroadcastMessage(&activePhysicsBodyUpdateMsg);
+GetActorList()->GetSubscriberSystem().BroadcastMessage(ActorMsg::E_DynamicObjMsg_AnimationUpdate);
+GetActorList()->GetSubscriberSystem().BroadcastMessage(&postUpdateMsg);
+SpecialFX::C_AnimatedMeshSpecialFX::PostUpdate();
+m_pDriverManager->UpdateDrivers(fTimeStep);
+m_pCrowdSystem->Update(Maths::HVec3(0.f), fTimeStep);
+Scheduler::Flush(pActor->GetSchedulerGroup());
+GetActorList()->GetSubscriberSystem().BroadcastMessage(Game::E_VehicleMessage_PostUpdate);
+Scheduler::Flush(Game::Actors::C_VehicleActor::GetAudioSchedulerGroup());
+m_pParticleManager->UpdateEmitters();
+m_pParticleManager->UpdateSuperEmitters();
+Scheduler::Flush(PickUpSubsystem::GetSchedulerGroup());
+m_pDynamicEffectRenderer->Update(C_GameApp::GetInstance()->GetElapsedRaceTime(), fTimeStep, Framework::C_Application::GetInstance()->GetTimer().IsPaused());
+m_pParticleManager->UpdateSpawn();
+m_pWind->Update(C_GameApp::GetInstance()->GetElapsedRaceTime(), fTimeStep);
+AmaxCam::CameraSystem().WorldUpdate(gamePeriod);
+AmaxCam::CameraSystem().WorldUpdate2(gamePeriod);
+GetActorList()->GetSubscriberSystem().BroadcastMessage(&cameraUpdateMsg);
+m_pSorceryEnvironmentSettings->Set();
+m_pCrowdFlagRenderer->SetFogColour(::EnvironmentSettings::FogEnvSettings::m_FogSettings.m_vFogColour);
+m_pCrowdFlagRenderer->SetDepthFogSettings(::EnvironmentSettings::FogEnvSettings::m_FogSettings.m_vDepthFogSettings);
+GetSceneGraph()->GetLightManager()->LogDebug();
+m_pParticleManager->UpdateFinal();
+m_pLightTrails->Update();
+GetActorList()->GetSubscriberSystem().BroadcastMessage(&pausedUpdateMsg);
+C_Game::GetInstance()->GetSubscriberSystem().BroadcastMessage(&pausedUpdateMsg);
+C_Game::GetInstance()->GetSubscriberSystem().BroadcastMessage(&finalUpdateMsg);
+```
+
+**or just alter how we call `C_GameWorld::Update()`**
+
+## How it was fixed
+
+To fix the calling of world update I produced a very convoluted code of
+
+```rust
+fn gameworld_update_fake(this: *mut c_void) {
+    unsafe {
+        HOOK_CALL_COUNT = HOOK_CALL_COUNT.wrapping_add(1);
+
+        let hook_call_count = HOOK_CALL_COUNT;
+
+        if hook_call_count == 1 {
+            info!(
+                "gameworld_update_fake: first call, this={:?}, target_dt={:.8}",
+                this, TARGET_GAME_DT
+            );
+        }
+
+        let raw_dt = match get_time_step_raw_fallback() {
+            Some(dt) if dt.is_finite() && dt > 0.0 => dt,
+            Some(dt) => {
+                warn!(
+                    "gameworld_update_fake: invalid raw_dt={:?}; calling original without gating",
+                    dt
+                );
+
+                ORIGINAL_CALL_COUNT = ORIGINAL_CALL_COUNT.wrapping_add(1);
+                GameWorldUpdateHook.call(this);
+                return;
+            }
+            None => {
+                warn!(
+                    "gameworld_update_fake: failed to read raw_dt; calling original without gating"
+                );
+
+                ORIGINAL_CALL_COUNT = ORIGINAL_CALL_COUNT.wrapping_add(1);
+                GameWorldUpdateHook.call(this);
+                return;
+            }
+        };
+
+        GAME_UPDATE_ACCUM += raw_dt;
+
+        if GAME_UPDATE_ACCUM > MAX_ACCUM {
+            let old_accum = GAME_UPDATE_ACCUM;
+
+            warn!(
+                "gameworld_update_fake: accumulator clamped from {:.8} to {:.8}",
+                old_accum, MAX_ACCUM
+            );
+
+            GAME_UPDATE_ACCUM = MAX_ACCUM;
+        }
+
+        if GAME_UPDATE_ACCUM < TARGET_GAME_DT {
+            SKIPPED_CALL_COUNT = SKIPPED_CALL_COUNT.wrapping_add(1);
+
+            let hook_call_count = HOOK_CALL_COUNT;
+            let skipped_call_count = SKIPPED_CALL_COUNT;
+            let original_call_count = ORIGINAL_CALL_COUNT;
+            let accum = GAME_UPDATE_ACCUM;
+
+            if hook_call_count % LOG_EVERY_N_CALLS == 0 {
+                debug!(
+                    "gameworld_update_fake: skip; calls={}, skipped={}, original={}, raw_dt={:.8}, accum={:.8}/{:.8}",
+                    hook_call_count,
+                    skipped_call_count,
+                    original_call_count,
+                    raw_dt,
+                    accum,
+                    TARGET_GAME_DT
+                );
+            }
+            call_send_controls_on_skipped_frame();
+            return;
+        }
+
+        // Consume exactly one 30 Hz game tick.
+        GAME_UPDATE_ACCUM -= TARGET_GAME_DT;
+
+        ORIGINAL_CALL_COUNT = ORIGINAL_CALL_COUNT.wrapping_add(1);
+
+        let call_dt = TARGET_GAME_DT;
+
+        if HOOK_CALL_COUNT % LOG_EVERY_N_CALLS == 0 {
+            let hook_call_count = HOOK_CALL_COUNT;
+            let skipped_call_count = SKIPPED_CALL_COUNT;
+            let original_call_count = ORIGINAL_CALL_COUNT;
+            let accum = GAME_UPDATE_ACCUM;
+
+            info!(
+                "gameworld_update_fake: call original; calls={}, skipped={}, original={}, raw_dt={:.8}, forced_dt={:.8}, remaining_accum={:.8}",
+                hook_call_count, skipped_call_count, original_call_count, raw_dt, call_dt, accum
+            );
+        }
+
+        call_original_with_forced_dt(this, call_dt);
+    }
+}
+```
+
+Which called the `C_GameWorld::Update()` only with 30hz tickrate. This fix instantly fixed everything. From rotations to car behavior and power ups behavior, while running on 500 fps. I'm a little bit sad, that everything above was instantly obsolete, but at the same time I was happy that game was finally running as it should on any fps.
+
+But while vehicle controls were okay, the power-ups only fired if button was pressed exactly during world update, since controls reading was happening only during `GlobalUpdate();` which creates a need for yet another final fix.
+
+# Inputs fix
+
+To fix this issue I introduced a buffer, which basically buffered inputs and pressed/debouced states, and then feed the readed with correct buttons state. This was done via 2 hooks:
+
+```rust
+fn gameinput_button_update_fake(
+    this: *mut c_void,
+    button_pressed_threshold: f32,
+) {
+    unsafe {
+        GameInputButtonUpdateHook.call(this, button_pressed_threshold);
+
+        if this.is_null() {
+            return;
+        }
+
+        let debounce_pressed =
+            read_u8(this, GAMEINPUT_BUTTON_DEBOUNCE_PRESSED_OFFSET) != 0;
+
+        if !debounce_pressed {
+            return;
+        }
+
+        let button_ptr = this as usize;
+
+        match pending_buttons().lock() {
+            Ok(mut pending) => {
+                pending.insert(button_ptr);
+            }
+            Err(e) => {
+                warn!(
+                    "gameinput_button_update_fake: pending button mutex poisoned: {:?}",
+                    e
+                );
+                return;
+            }
+        }
+
+        let count = PENDING_PRESS_COUNT
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+
+        if count == 1 || count % LOG_EVERY_N_PENDING_PRESSES == 0 {
+            trace!(
+                "gameinput_button_update_fake: stored pending debounced press; count={}, button=0x{:08X}",
+                count,
+                button_ptr
+            );
+        }
+    }
+}
+```
+
+and
+
+```rust
+fn get_button_pressed_debounced_fake(
+    this: *mut c_void,
+    button_id: u32,
+) -> u8 {
+    unsafe {
+        let original = GetButtonPressedDebouncedHook.call(this, button_id);
+
+        let getter_count = GETTER_CALL_COUNT
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+
+        let in_real_world_update = is_inside_real_gameworld_update();
+
+        if CONSUME_ONLY_DURING_REAL_GAMEWORLD_UPDATE && !in_real_world_update {
+            return original;
+        }
+
+        let Some(button_ptr) = get_button_ptr_from_game_input(this, button_id) else {
+            return original;
+        };
+
+        // If original is already true during the real tick, clear any pending entry too.
+        // Otherwise the same press may be replayed on the next real tick.
+        if original != 0 {
+            if in_real_world_update {
+                if let Ok(mut pending) = pending_buttons().lock() {
+                    pending.remove(&button_ptr);
+                }
+            }
+
+            return original;
+        }
+
+        let consumed = match pending_buttons().lock() {
+            Ok(mut pending) => pending.remove(&button_ptr),
+            Err(e) => {
+                warn!(
+                    "get_button_pressed_debounced_fake: pending button mutex poisoned: {:?}",
+                    e
+                );
+                false
+            }
+        };
+
+        if consumed {
+            let consume_count = CONSUME_COUNT
+                .fetch_add(1, Ordering::Relaxed)
+                .wrapping_add(1);
+
+            debug!(
+                "get_button_pressed_debounced_fake: consumed pending press; consume_count={}, getter_count={}, game_input={:?}, button_id={}, button=0x{:08X}",
+                consume_count,
+                getter_count,
+                this,
+                button_id,
+                button_ptr
+            );
+
+            return 1;
+        }
+
+        original
+    }
+}
+```
+
+Those 2 fixes made the game work as it should.
+
+And now, after 16 years, game was ready for modern age gpus and its power. Full code is yet to be posted, since it's still in "testing" phase.
