@@ -2,6 +2,7 @@
 
 23/08/25 - very early version
 17/09/25 - half done client research, history
+02/06/26 - partial rewrite
 ---
 
 ## INTRO
@@ -29,11 +30,17 @@ At this point in time, thanks to website "dlldownloader" and a lot of games I wa
 
 I've zero idea where first 2 dlls are coming from, and I'm not sure any interesting games utilizing it. So I focused on version 3.5, while utilizing Sk8te 2 symbols to aid me in reversing stuff. Plus from version 4 they switched to https, with ciphers which are now not supported by pretty much anything modern. So I decided to tackle version 3 first, and then work with version 4.
 
+## Setup
+
+For testing purposes I picked **Need For Speed: Carbon**. First reason for that was that I had it installed. Second one being that I knew beforehand that it resolves a domain of `locate.madserver.net` due to my work on FESL. In addition to that game had a nice way to quickly start races, which is usually very beneficial for debugging.
+
+So with one more line to `hosts` I kicked off that adventure of mine.
+
+# locateService
+
 ## First packet
 
-On load, NFSC sends a http request to `http://locate.madserver.net/advsrc/locateService`.
-
-If we check the content of data being sent:
+On load, NFSC sends a http request to `http://locate.madserver.net/advsrc/locateService` with content of
 
 ```
 POST /adsrv/locateService HTTP/1.1
@@ -56,7 +63,7 @@ This payload looks a little bit off. Let's check raw bytes.
 
 Okay. Now things are getting interesting. This is a raw bytes buffer! Curious approach by Massive.
 
-After some snooping around in Sk8te 2 I was able to track down the function responsible for constructing said buffer:
+After some snooping around in Sk8te 2 I was able to track down the function responsible for constructing the payload:
 
 ```C++
 void WriteLocateServiceRequest@CRequestLocateService@MassiveAdClient3
@@ -105,7 +112,7 @@ LAB_834b1648:
 }
 ```
 
-And things become crystal clear! Thanks symbols, you're trully a biggest gift to humanity.
+While code is slightly convoluted to read, we can clearly see calls to `WriteU8`, `WriteString` and some others functions. Which confirms that payload is in fact bytes, which is rather curious approach by Massive. I theorize that it was done due to legacy, with them changing transport from raw TCP to HTTP.
 
 Using the function above we're able to fully understand the payload:
 
@@ -183,11 +190,13 @@ Quick and dirty, but it gets the job done.
 [2025-06-06T06:11:44Z INFO  actix_web::middleware::logger] 127.0.0.1 "POST /adsrv/locateService HTTP/1.1" 200 74 "-" "Adclient Massive Inc./3.2.1.55" 0.001149
 ```
 
+## First reply
+
 Now it's time to figure out the reply for this request.
 
 ## Reply to LocateService request
 
-Just below `WriteLocateServiceRequest` I found `Parse@CRequestLocateService@MassiveAdClient3` and it's a rather long function.
+Just below `WriteLocateServiceRequest` the the binary I found `Parse@CRequestLocateService@MassiveAdClient3` and it's a rather long function.
 
 % SCREENSHOT HERE %
 
@@ -554,7 +563,9 @@ finally made it all work as it should. And now we have a new request!
 [2025-08-25T04:37:48Z INFO  actix_web::middleware::logger] 127.0.0.1 "POST /adsrv/openSession HTTP/1.1" 404 0 "-" "Adclient Massive Inc./3.2.1.55" 0.000210
 ```
 
-## OpenSession request
+# OpenSession
+
+## Request
 
 We check new request payload and
 
@@ -1737,3 +1748,11 @@ Oh and, I did get back to Vegas 1 and made it work.
 While technically I achieved my goal, this is a mere proof of concept at this point. I still need to finish the server code, so I can put it on github without too much shame. Plus a dumper for ads names. Plus v4 support (this probably will be a separate write-up). Plus v1 and v2 research and support, just because I can.
 
 Thanks to making it this far. And thanks to halvors, lasercar and RedLine for their support and listening to my rumblings.
+
+# June 2026
+
+Between last update and this one some things had happen.
+
+## Massive Ad client SDK leak
+
+Thanks to a particular person, we got ourselves a leak of Massive Ad Client SDK files, which were previously missing from the internet. This made me 

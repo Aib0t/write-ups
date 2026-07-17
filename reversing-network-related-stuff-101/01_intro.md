@@ -2,7 +2,7 @@
 
 While protocols varies (http, grpc, RakNet, DNS, Mysql) their design stays the same across the board. So in this chapter I'll try to explain what to look for, what to ignore and some caveats in protocol analysis.
 
-Analysis of protocols shares a lot with binary file research and if you're experienced with one, you're gonna be good with another. It's all about finding out patterns and making sense out of them. It takes time, but it's a rather approachable task for a person with any skillset. 
+Analysis of protocols shares a lot with binary file research and if you're experienced with one, you're gonna be good with another. It's all about finding out patterns and making sense out of them. It takes time, but it's a rather approachable task for a person with any skillset. Yes, going further it will require programming knowledge, but at this point in time we're talking about patters, and not "implementing those patterns in the code".
 
 Pretty much every protocol operates between levels 4 to 6 of OSI model and usually build on top of TCP or UDP (level 4). Then comes level 5 - session level. This is usually taken care for you by libs. And finally a level 6 - messages itself.
 
@@ -32,7 +32,7 @@ Payloads, in 99% of cases processed as a stream. This is the reason why in, 95% 
 - reader needs to know how many bytes to process **exactly**
 - reader must be able to process payload (no way!)
 
-This is obvious, dumb even, but it helps with approaching the unknown. But let's break second point a little, taking grpc as an example.
+This is obvious, dumb even, but it helps with approaching the unknown. But let's going a little deeper with a second point, taking grpc as an example.
 
 In grpc you can define packets payload like
 
@@ -56,7 +56,7 @@ we can write this data in binary, send over tcp/udp, and reconstruct payload at 
 
 __**REAL WORLD**__
 
-And now you can safely forget whatever I said before, because real world has nothing to do with my world of ponies and rainbow I decribed a second before. The list of real world crap you gonna meet is endless. I will just provide some examples from real world
+And now you can safely forget whatever I said before, because real world has nothing to do with my world of ponies and rainbow I described a second before. The list of real world crap you gonna meet is endless. I will just provide some examples from real world
 
 **Bit-sized payloads**
 

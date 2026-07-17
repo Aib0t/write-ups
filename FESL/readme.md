@@ -43,7 +43,7 @@ Despite all fields being text, in the code they are parsed differently, usually 
 
 ## Theater
 
-Theater, or “GameCoordinator” is a combination of “Sessions storage” and “NAT Punching/Tunneling” solution in EA universe. This service utilizes 2 ports, TCP and UDP on the same port number. 
+Theater, or “GameCoordinator” is a combination of “Sessions manager” and “NAT Punching/Tunneling” solution in EA universe. This service utilizes 2 ports, TCP and UDP on the same port number. 
 
 To get matched into a session client would send a packet to PlayNow service of FESL first, describing all filtering requests. This puts the client into a queue. After checking all sessions available to Theater client would get back a list of the sessions, or a task to create a new one (which usually does nothing, but more on this later)
 
@@ -53,11 +53,26 @@ The second main function is NAT Punching/Tunneling, which is listening on the UD
 
 ## Messenger
 
-For whatever reason, EA moved friends, rich presence, invites and messaging service to a dedicated server. It’s not a very interesting service, so that’s pretty much all I can say about it.
+> For whatever reason, EA moved friends, rich presence, invites and messaging service to a dedicated server. It’s not a very interesting service, so that’s pretty much all I can say about it. - a very naive me, 2025
+
+Messenger turns out to be the most convoluted, complex, and outdated service out of all 3.
+
+You see, Messenger seems like a very simple service on the first glance. It's the oldest one, judging by the protocol and its existence before FESL was a thing. But in this deceptive simplicity lives an extremely bloated service, which is a pain to work with. And due to its code structure, figuring out ins and outs of it was tough. While writers for payloads are somewhat easy to find in the code by known strings, readers are dangling in the code in numerous vftables and dynamic registrations.
+
+There are 4 main objects messengers operates on:
+
+- Roster (aka friend list)
+- Invites
+- Presence
+- Messages
+
+All of those are convoluted mess. The fact, that an average EA title utilize more Messenger calls than any other service, makes this service a very crucial piece to implement all the features.
 
 ## Other services
-There are 2 other less common services - Magma and easo.
+There are 3 other less common services - Magma and easo.
 
 Magma is a HTTPS web API, which stores yet another subset of data, mainly related to stats. Not much is known about it, and the best documented Magma implementation exists as a part of Battlefield Heroes server emulator.
 
 easo is a simple http based file storage, which keeps files for some titles. Like MOTD, in case of BFBC2.
+
+There is also an IRC chat, which is implemented a C&C FESL emulator, instead of messenger `SEND` and `RECV`
