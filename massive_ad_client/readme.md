@@ -1749,10 +1749,237 @@ While technically I achieved my goal, this is a mere proof of concept at this po
 
 Thanks to making it this far. And thanks to halvors, lasercar and RedLine for their support and listening to my rumblings.
 
-# June 2026
+# July 2026
 
 Between last update and this one some things had happen.
 
-## Massive Ad client SDK leak
+## Massive Ad client lib leak
 
-Thanks to a particular person, we got ourselves a leak of Massive Ad Client SDK files, which were previously missing from the internet. This made me 
+Thanks to a particular person, we got ourselves a leak of Massive Ad Client SDK files. This happen in early 2026, and not in July, but I was busy with other things, so didn't have time to properly dig in. There is not one, but many versions that got leaked as a result:
+
+- `2.6.4.0.2005Oct10.77_Massive_Ad_Client`
+- `3.0.2.95_Massive_Ad_Client`
+- `3.1.0.62.x1_Massive_Ad_Client`
+- `3.1.5.82_Massive_Ad_Client`
+- `3.1.7.88_Massive_Ad_Client`
+- `3.2.1.55_Massive_Ad_Client`
+
+Code is shipped as a `.lib` file, so we didn't get the sources, but it's still a pretty cool to have those. Plus they came bundled with a documentation. Which finally answer a question of "What is Crex?"
+
+```
+The GetCrexID member function allows the subscriber to access the internal handle value of
+the Creative Execution it is subscribed to.
+```
+
+Okay, I guess?
+
+There is a lot of other pretty useful information, but it's finally time to talk about **the final fix**
+
+# The final fix
+
+So on 17th of July I released NFS Carbon support to the public. Since I have time to do it, I also included support for in-game ads as a "fun factor". Which worked for me, so server was deployed, client dll was bundled in, and it was shipped like that. And to my suprise in-game ads didn't work for anybody else, but me. Oh.
+
+After some code inspection I find out that I missed a very important part - signature key in `OpenSession` request.
+
+## Revisiting `OpenSession`
+
+You see, I'm a forgetful person. That's why I make write-ups as a form of documenting my progress for myself and maybe some others. So back in 2025 during `OpenSession` research I made this piece of code:
+
+```rust
+ pub fn build_reply_with_signature(self) -> Vec<u8> {
+        let mut pre_final_buf: Vec<u8> = Vec::new();
+
+        pre_final_buf.push(self.task_id.into());
+        pre_final_buf.write_u32::<BigEndian>(self.buf.len() as u32 + 23);
+        pre_final_buf.extend_from_slice(&self.buf);
+
+        let time = "2025-01-01 07:00:00,000";
+        let mut array = bytes_to_vec_u32(time.as_bytes());
+        let (left, _) = array.split_at_mut(5);
+
+        let mut mt = MT19937::new_with_slice_seed(left);
+
+        //1f425c0c52ffc48634a52eea7da252
+
+        let a = mt19937::MT19937::next_u32(&mut mt);
+        let b = mt19937::MT19937::next_u32(&mut mt);
+        let c = mt19937::MT19937::next_u32(&mut mt);
+        let d = mt19937::MT19937::next_u32(&mut mt);
+
+        let token = format!("{:08x}{:08x}{:08x}{:08x}", a, b, c, d);
+        println!("token = {}", token);
+
+        let mac = Hmac::<Sha1>::new_from_slice(token.as_bytes()).unwrap();
+
+        let mut temp = pre_final_buf.clone();
+        temp.push(0x1e);
+        // let temp_test = hex::encode(temp.clone());
+
+        // info!("temp_test: {temp_test}");
+
+        // mac.update(&temp);
+
+        // let result = mac.finalize();
+        // let hmac_bytes = result.into_bytes();
+
+        // let hmac_test = hex::encode(hmac_bytes.clone());
+
+        // info!("hmac_bytes: {hmac_test}");
+        let key_ascii = b"1f425c0c52ffc48634a52eea7da252"; // << This is the biiiiiiiig problem
+        let digest = calculate_sha1_hmac_exact(key_ascii, &temp);
+        info!("digest: {}", hex::encode(&digest));
+
+        let mut final_buf: Vec<u8> = Vec::new();
+        final_buf.push(self.version.into());
+        final_buf.extend_from_slice(&pre_final_buf);
+        final_buf.push(OpenSessionResponseMADFields::HMACSignature as u8);
+        final_buf
+            .write_u16::<BigEndian>(digest.len() as u16)
+            .unwrap();
+        final_buf.extend_from_slice(&digest);
+
+        final_buf
+    }
+```
+
+So back then I assumed that `key_ascii` is what I get from hmac based on time string. So it should be universal for all clients.
+
+**But I completely forgot that I dumped that value from memory of my client!** In addition to that I hardcoded it and called it a day, since it worked for me. Which is obviously is not the way to do it.
+
+So I dived in again and find out that I was not JUST wrong, I was very, very wrong, and missed a very important part of the code
+
+## Sudden appearance of RSA
+
+Revisiting `OpenSession`, which all others clients failed, but me, uncovered a *slight* problem - I wasn't even reading it. So opening my trusty symbols packed binaries showed me that game was writing `Verification token` in plain text. I checked what the server was getting, and it was a byte blob. "Curious", I said to myself, and cross referenced the funtion in Carbon binary.
+
+Well, turns out in massive ad client 3.5, since they were using https they wrote it as a string. But in 3.0 they were using http, so they encrypted the token with RSA. 
+
+```C
+  FUN_0087557c(&_Dst_00bbb0e8,0xbbb0b0,sVar1,ppcVar3,(size_t *)ppcVar4);
+  if (param_3 != (char *)0x0) {
+    CRequestObject_WriteU8(this,0x45,0);
+    FUN_0086e20a(this,param_3,(uint)param_5,0);
+    FUN_0086d9b0();
+    (*(code *)PTR_free_00a7b940)(param_3);
+  }
+```
+
+*the exact fun part where RSA is happening*
+
+
+After some mapping it resulted in the following payload:
+
+```rust
+#[derive(Debug,Default, Eq, PartialEq)]
+pub struct OpenSessionRequest {
+    pub sku_name: Option<String>,
+    pub sku_version: Option<String>,
+    pub session_type: Option<u8>,
+    pub hashed_third_party_id: Option<String>,
+    pub third_party_service_name: Option<String>,
+    pub multiplayer_guid: Option<String>,
+    pub verification_token: Option<Vec<u8>>,
+    pub hashed_hardware_id: Option<String>,
+}
+```
+
+And it also became apparent that `verification_token` is based on client data (most likely mac), so I have 2 options:
+
+- patching token generation to be static
+- replacing RSA key
+
+Replacing token was doable, but I failed to find the exact function in Carbon via cross reference fast enough, but with RSA I had a clue in form of `massive_publickey.h` in `3.0.2.95_Massive_Ad_Client`
+
+```C
+//----------------------------------------------------------------------------
+//
+// Sample Game
+//
+//----------------------------------------------------------------------------
+#ifndef MASSIVE_PUBLICKEY_H
+#define MASSIVE_PUBLICKEY_H
+
+#ifdef __cplusplus
+extern "C"{
+#endif
+
+const unsigned char MASSIVE_PublicKey[]=
+{
+	0x98,0x00,0x00,0x00,0x01,0x80,0x00,0x00,0x00,0xd6,
+	0x37,0xae,0xe5,0xcc,0x10,0xa5,0x8f,0xf0,0x2c,0x33,
+	0xa9,0xb3,0xb6,0x13,0x17,0x9e,0xd0,0xf2,0x77,0x58,
+	0xe2,0xf6,0x2f,0x43,0x72,0x35,0xc4,0xec,0x0c,0x3b,
+	0xd3,0x2b,0x2d,0xd3,0x0c,0xa9,0xea,0xe8,0xa7,0x1b,
+	0x1a,0x63,0x2b,0xbc,0xde,0xa8,0xd6,0xfa,0x8e,0x07,
+	0x82,0xb5,0x0d,0x11,0x7d,0x61,0x96,0xd2,0xbf,0x5e,
+	0xfe,0x3e,0x6f,0x94,0xd9,0x50,0xb3,0xf5,0xa0,0x77,
+	0x6d,0xc1,0x64,0x51,0xe7,0x02,0x40,0xbc,0x55,0x9f,
+	0xf6,0x2c,0x69,0x93,0x4f,0x7d,0x4f,0x37,0x91,0x48,
+	0x8b,0xe1,0x30,0xc1,0xd3,0xc4,0x5d,0x06,0x93,0xcc,
+	0x7f,0x2e,0x34,0x43,0xd8,0xbd,0x3b,0x09,0x60,0xe4,
+	0x14,0x21,0x70,0xb2,0xd7,0x08,0x34,0x0a,0x7e,0xed,
+	0xb9,0x69,0x5b,0x27,0xea,0x4a,0x71,0x03,0x00,0x00,
+	0x00,0x01,0x00,0x01
+};
+
+
+#ifdef __cplusplus
+}
+#endif
+#endif
+```
+
+So it seems like they used a unique RSA key per title. But searching for `0x98,0x00,0x00,0x00,0x01,0x80` in Carbon binary showed exactly what I needed:
+
+![alt text](img/mad_rsa.png)
+
+*name was added by me*
+
+So, patching the token is still seemed like a better option in a long run, but I left it for later (expect another update in 2027 I guess) and decided to use RSA patching. Some `openssl` magic and a simple python script, and I had a pair of my own keys to use. Some client patching and an addition of:
+
+```rust
+fn massive_private_key() -> Result<RsaPrivateKey, rsa::pkcs8::Error> {
+    RsaPrivateKey::from_pkcs8_pem(MASSIVE_PRIVATE_KEY_PEM)
+}
+
+fn decrypt_verification_token(encoded: &[u8]) -> Result<Vec<u8>, OpenSessionParseError> {
+    let private_key = massive_private_key()?;
+    Ok(private_key.decrypt(Oaep::new::<Sha1>(), encoded)?)
+}
+```
+
+and a finall change of
+
+```rust
+    pub fn build_reply_with_signature(self, verification_token: &[u8]) -> Vec<u8> {
+        let mut pre_final_buf: Vec<u8> = Vec::new();
+
+        pre_final_buf.push(self.task_id.into());
+        pre_final_buf.write_u32::<BigEndian>(self.buf.len() as u32 + 23);
+        pre_final_buf.extend_from_slice(&self.buf);
+
+        let mut temp = pre_final_buf.clone();
+        temp.push(0x1e);
+        let digest = calculate_sha1_hmac_exact(verification_token, &temp);
+        info!("digest: {}", hex::encode(&digest));
+
+        let mut final_buf: Vec<u8> = Vec::new();
+        final_buf.push(self.version.into());
+        final_buf.extend_from_slice(&pre_final_buf);
+        final_buf.push(OpenSessionResponseMADFields::HMACSignature as u8);
+        final_buf
+            .write_u16::<BigEndian>(digest.len() as u16)
+            .unwrap();
+        final_buf.extend_from_slice(&digest);
+
+        final_buf
+    }
+```
+
+and finally, all the clients were correctly seeing ads in the game.
+
+Expect a release of the source code somewhere in 2026, when I clean it up enough to be ready for public use. And maybe a 3.5 support once I get to ProStreet.
+
+
+
+
